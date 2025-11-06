@@ -60,19 +60,31 @@ cd MarkItDown_GUI
    - **Linux**: `sudo apt install pandoc` (Ubuntu/Debian) or `sudo yum install pandoc` (RHEL/CentOS)
 
 3. **Install Tesseract-OCR** (required for scanned PDF support):
-   - **Windows**: Download installer from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
+   - **Windows**:
+     - Download installer from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
      - Download `tesseract-ocr-w64-setup-5.x.x.exe` (latest version)
-     - Run installer and note the installation path (default: `C:\Program Files\Tesseract-OCR`)
-     - Add Tesseract to PATH: `setx PATH "%PATH%;C:\Program Files\Tesseract-OCR"`
+     - Run installer (default: `C:\Program Files\Tesseract-OCR`)
+     - **Add to PATH using GUI (IMPORTANT - do NOT use setx):**
+       1. Press `Win + R`, type `sysdm.cpl`, press Enter
+       2. Advanced tab → Environment Variables
+       3. Under "User variables", select "Path" → Edit
+       4. Click "New" and add: `C:\Program Files\Tesseract-OCR`
+       5. Click OK on all dialogs
      - Restart your terminal/command prompt
    - **macOS**: `brew install tesseract`
    - **Linux**: `sudo apt install tesseract-ocr` (Ubuntu/Debian) or `sudo yum install tesseract` (RHEL/CentOS)
 
 4. **Install Poppler** (required for pdf2image used by OCR):
-   - **Windows**: Download from [oschwartz10612/poppler-windows](https://github.com/oschwartz10612/poppler-windows/releases)
+   - **Windows**:
+     - Download from [oschwartz10612/poppler-windows](https://github.com/oschwartz10612/poppler-windows/releases)
      - Download `Release-xx.xx.x-0.zip`
-     - Extract to a location like `C:\Program Files\poppler`
-     - Add `C:\Program Files\poppler\Library\bin` to PATH
+     - Extract to `C:\Program Files\poppler`
+     - **Add to PATH using GUI (IMPORTANT - do NOT use setx):**
+       1. Press `Win + R`, type `sysdm.cpl`, press Enter
+       2. Advanced tab → Environment Variables
+       3. Under "User variables", select "Path" → Edit
+       4. Click "New" and add: `C:\Program Files\poppler\Library\bin`
+       5. Click OK on all dialogs
    - **macOS**: `brew install poppler`
    - **Linux**: `sudo apt install poppler-utils` (Ubuntu/Debian) or `sudo yum install poppler-utils` (RHEL/CentOS)
 
