@@ -6,17 +6,19 @@ Supports: PDF, DOCX, PPTX, XLSX, XLS, HTML, TXT, CSV, JSON, XML, ZIP, JPG, PNG, 
 
 import sys
 import os
+import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QListWidget, QLabel, QFileDialog, QTextEdit,
     QLineEdit, QGroupBox, QProgressBar, QMessageBox, QListWidgetItem,
-    QCheckBox, QSpinBox
+    QCheckBox, QSpinBox, QMenu
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QIcon, QDragEnterEvent, QDropEvent
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QMimeData
+from PyQt6.QtGui import QIcon, QDragEnterEvent, QDropEvent, QAction
 from markitdown import MarkItDown
+from theme_manager import ThemeManager
 
 
 class ConversionWorker(QThread):
@@ -27,10 +29,12 @@ class ConversionWorker(QThread):
     finished = pyqtSignal()
     error = pyqtSignal(str, str)  # filename, error message
 
-    def __init__(self, files: List[str], output_dir: str, llm_client=None, llm_model: Optional[str] = None):
+    def __init__(self, files: List[str], output_dir: str, use_source_dir: bool = True,
+                 llm_client=None, llm_model: Optional[str] = None):
         super().__init__()
         self.files = files
         self.output_dir = output_dir
+        self.use_source_dir = use_source_dir
         self.llm_client = llm_client
         self.llm_model = llm_model
         self._is_running = True
@@ -64,21 +68,28 @@ class ConversionWorker(QThread):
                     # Convert file
                     result = md.convert(file_path)
 
+                    # Determine output directory
+                    if self.use_source_dir:
+                        # Use the same directory as the source file
+                        output_dir = os.path.dirname(file_path)
+                    else:
+                        output_dir = self.output_dir
+
                     # Generate output filename
                     base_name = Path(file_path).stem
-                    output_path = os.path.join(self.output_dir, f"{base_name}.md")
+                    output_path = os.path.join(output_dir, f"{base_name}.md")
 
                     # Handle duplicate filenames
                     counter = 1
                     while os.path.exists(output_path):
-                        output_path = os.path.join(self.output_dir, f"{base_name}_{counter}.md")
+                        output_path = os.path.join(output_dir, f"{base_name}_{counter}.md")
                         counter += 1
 
                     # Save markdown
                     with open(output_path, 'w', encoding='utf-8') as f:
                         f.write(result.text_content)
 
-                    self.log.emit(f"✓ Saved: {os.path.basename(output_path)}")
+                    self.log.emit(f"✓ Saved: {output_path}")
                     self.progress.emit(idx + 1, total)
 
                 except Exception as e:
@@ -93,6 +104,21 @@ class ConversionWorker(QThread):
             self.log.emit(f"Fatal error: {str(e)}")
         finally:
             self.finished.emit()
+
+
+class DragDropLabel(QLabel):
+    """Custom label that shows drag and drop hint"""
+
+    def __init__(self, text: str, parent=None):
+        super().__init__(text, parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                padding: 20px;
+                opacity: 0.6;
+            }
+        """)
 
 
 class MarkItDownGUI(QMainWindow):
@@ -118,12 +144,43 @@ class MarkItDownGUI(QMainWindow):
         super().__init__()
         self.files_to_convert: List[str] = []
         self.worker: Optional[ConversionWorker] = None
+        self.theme_manager = ThemeManager()
+        self.config_file = Path(__file__).parent / "config.json"
+        self.config = self.load_config()
         self.init_ui()
+        self.apply_saved_theme()
+
+    def load_config(self) -> Dict:
+        """Load configuration from file"""
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading config: {e}")
+        return {"theme": "Espresso", "use_source_dir": True}
+
+    def save_config(self):
+        """Save configuration to file"""
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(self.config, f, indent=2)
+        except Exception as e:
+            print(f"Error saving config: {e}")
+
+    def apply_saved_theme(self):
+        """Apply the saved theme from config"""
+        theme_name = self.config.get("theme", "Espresso")
+        if theme_name in self.theme_manager.get_theme_names():
+            self.theme_manager.apply_theme(QApplication.instance(), theme_name)
 
     def init_ui(self):
         """Initialize the user interface"""
         self.setWindowTitle("MarkItDown GUI - Document to Markdown Converter")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(900, 700)
+
+        # Create menu bar
+        self.create_menu_bar()
 
         # Central widget
         central_widget = QWidget()
@@ -140,12 +197,21 @@ class MarkItDownGUI(QMainWindow):
         file_group = QGroupBox("Input Files")
         file_layout = QVBoxLayout()
 
+        # Drag and drop hint label
+        self.drag_hint_label = DragDropLabel(
+            "Drag and drop files or folders here\n"
+            "or use the buttons below to add files"
+        )
+        file_layout.addWidget(self.drag_hint_label)
+
         # File list
         self.file_list = QListWidget()
         self.file_list.setAcceptDrops(True)
         self.file_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.file_list.dragEnterEvent = self.drag_enter_event
         self.file_list.dropEvent = self.drop_event
+        self.file_list.dragLeaveEvent = self.drag_leave_event
+        self.file_list.setMinimumHeight(150)
         file_layout.addWidget(self.file_list)
 
         # File buttons
@@ -175,14 +241,26 @@ class MarkItDownGUI(QMainWindow):
         output_group = QGroupBox("Output Settings")
         output_layout = QVBoxLayout()
 
+        # Use source directory checkbox
+        self.use_source_dir_checkbox = QCheckBox(
+            "Save converted files in the same directory as source files"
+        )
+        self.use_source_dir_checkbox.setChecked(self.config.get("use_source_dir", True))
+        self.use_source_dir_checkbox.stateChanged.connect(self.on_use_source_dir_changed)
+        output_layout.addWidget(self.use_source_dir_checkbox)
+
+        # Output directory selection
         output_dir_layout = QHBoxLayout()
-        output_dir_layout.addWidget(QLabel("Output Directory:"))
+        output_dir_layout.addWidget(QLabel("Custom Output Directory:"))
         self.output_dir_edit = QLineEdit()
         self.output_dir_edit.setText(os.path.expanduser("~/Documents"))
+        self.output_dir_edit.setEnabled(not self.use_source_dir_checkbox.isChecked())
         output_dir_layout.addWidget(self.output_dir_edit)
 
         browse_btn = QPushButton("Browse")
         browse_btn.clicked.connect(self.browse_output_dir)
+        browse_btn.setEnabled(not self.use_source_dir_checkbox.isChecked())
+        self.browse_btn = browse_btn
         output_dir_layout.addWidget(browse_btn)
 
         output_layout.addLayout(output_dir_layout)
@@ -220,19 +298,8 @@ class MarkItDownGUI(QMainWindow):
         self.convert_btn = QPushButton("Convert to Markdown")
         self.convert_btn.setStyleSheet("""
             QPushButton {
-                background-color: #4CAF50;
-                color: white;
                 font-size: 14px;
-                font-weight: bold;
                 padding: 10px 20px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
             }
         """)
         self.convert_btn.clicked.connect(self.start_conversion)
@@ -241,15 +308,8 @@ class MarkItDownGUI(QMainWindow):
         self.stop_btn = QPushButton("Stop")
         self.stop_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f44336;
-                color: white;
                 font-size: 14px;
-                font-weight: bold;
                 padding: 10px 20px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #da190b;
             }
         """)
         self.stop_btn.clicked.connect(self.stop_conversion)
@@ -270,10 +330,86 @@ class MarkItDownGUI(QMainWindow):
         info_label.setWordWrap(True)
         main_layout.addWidget(info_label)
 
+        # Update drag hint visibility
+        self.update_drag_hint_visibility()
+
+    def create_menu_bar(self):
+        """Create menu bar with theme selection"""
+        menubar = self.menuBar()
+
+        # Themes menu
+        themes_menu = menubar.addMenu("Themes")
+
+        # Get all theme names
+        theme_names = self.theme_manager.get_theme_names()
+        current_theme = self.config.get("theme", "Espresso")
+
+        # Create theme actions
+        for theme_name in theme_names:
+            action = QAction(theme_name, self)
+            action.setCheckable(True)
+            if theme_name == current_theme:
+                action.setChecked(True)
+            action.triggered.connect(lambda checked, name=theme_name: self.change_theme(name))
+            themes_menu.addAction(action)
+
+        # Help menu
+        help_menu = menubar.addMenu("Help")
+
+        about_action = QAction("About", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+
+    def change_theme(self, theme_name: str):
+        """Change the application theme"""
+        self.theme_manager.apply_theme(QApplication.instance(), theme_name)
+        self.config["theme"] = theme_name
+        self.save_config()
+
+        # Update checkmarks in menu
+        for action in self.menuBar().actions()[0].menu().actions():
+            action.setChecked(action.text() == theme_name)
+
+        self.log(f"Theme changed to: {theme_name}")
+
+    def show_about(self):
+        """Show about dialog"""
+        QMessageBox.about(
+            self,
+            "About MarkItDown GUI",
+            "MarkItDown GUI v2.0\n\n"
+            "A PyQt6 GUI for converting various document formats to Markdown.\n\n"
+            "Features:\n"
+            "• 47 beautiful themes\n"
+            "• Drag and drop support\n"
+            "• Batch conversion\n"
+            "• Multiple file format support\n\n"
+            "Powered by Microsoft MarkItDown\n"
+            "Theme system from Fiori_Search"
+        )
+
+    def on_use_source_dir_changed(self, state):
+        """Handle use source directory checkbox change"""
+        use_source = state == Qt.CheckState.Checked.value
+        self.config["use_source_dir"] = use_source
+        self.save_config()
+
+        # Enable/disable custom directory controls
+        self.output_dir_edit.setEnabled(not use_source)
+        self.browse_btn.setEnabled(not use_source)
+
+    def update_drag_hint_visibility(self):
+        """Show or hide drag hint label based on file list"""
+        self.drag_hint_label.setVisible(len(self.files_to_convert) == 0)
+
     def drag_enter_event(self, event: QDragEnterEvent):
         """Handle drag enter event"""
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
+
+    def drag_leave_event(self, event):
+        """Handle drag leave event"""
+        pass
 
     def drop_event(self, event: QDropEvent):
         """Handle drop event"""
@@ -343,6 +479,7 @@ class MarkItDownGUI(QMainWindow):
                 self.file_list.addItem(item)
 
         self.statusBar().showMessage(f"Total files: {len(self.files_to_convert)}")
+        self.update_drag_hint_visibility()
 
     def remove_selected(self):
         """Remove selected files from the list"""
@@ -358,6 +495,7 @@ class MarkItDownGUI(QMainWindow):
 
         self.log(f"Removed {len(selected_items)} file(s)")
         self.statusBar().showMessage(f"Total files: {len(self.files_to_convert)}")
+        self.update_drag_hint_visibility()
 
     def clear_all(self):
         """Clear all files from the list"""
@@ -365,6 +503,7 @@ class MarkItDownGUI(QMainWindow):
         self.file_list.clear()
         self.log("Cleared all files")
         self.statusBar().showMessage("Ready")
+        self.update_drag_hint_visibility()
 
     def browse_output_dir(self):
         """Browse for output directory"""
@@ -394,25 +533,28 @@ class MarkItDownGUI(QMainWindow):
             )
             return
 
+        use_source_dir = self.use_source_dir_checkbox.isChecked()
         output_dir = self.output_dir_edit.text()
-        if not output_dir:
+
+        if not use_source_dir and not output_dir:
             QMessageBox.warning(
                 self,
                 "No Output Directory",
-                "Please specify an output directory."
+                "Please specify an output directory or enable 'Use source directory'."
             )
             return
 
-        # Create output directory if it doesn't exist
-        try:
-            os.makedirs(output_dir, exist_ok=True)
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Failed to create output directory: {str(e)}"
-            )
-            return
+        # Create output directory if it doesn't exist and not using source dir
+        if not use_source_dir:
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to create output directory: {str(e)}"
+                )
+                return
 
         # Disable UI elements
         self.convert_btn.setVisible(False)
@@ -427,7 +569,8 @@ class MarkItDownGUI(QMainWindow):
         # Create and start worker thread
         self.worker = ConversionWorker(
             self.files_to_convert.copy(),
-            output_dir
+            output_dir,
+            use_source_dir
         )
         self.worker.progress.connect(self.update_progress)
         self.worker.log.connect(self.log)
@@ -462,11 +605,18 @@ class MarkItDownGUI(QMainWindow):
         self.statusBar().showMessage("Conversion complete")
 
         # Show completion message
+        use_source_dir = self.use_source_dir_checkbox.isChecked()
+        if use_source_dir:
+            msg = f"Converted {len(self.files_to_convert)} file(s) to Markdown.\n" \
+                  f"Files saved in their respective source directories."
+        else:
+            msg = f"Converted {len(self.files_to_convert)} file(s) to Markdown.\n" \
+                  f"Output directory: {self.output_dir_edit.text()}"
+
         QMessageBox.information(
             self,
             "Conversion Complete",
-            f"Converted {len(self.files_to_convert)} file(s) to Markdown.\n"
-            f"Output directory: {self.output_dir_edit.text()}"
+            msg
         )
 
         # Reset progress bar

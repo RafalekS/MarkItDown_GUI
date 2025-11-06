@@ -8,11 +8,14 @@ A modern PyQt6 GUI application for converting various document formats to Markdo
 
 ## Features
 
+- **47 Beautiful Themes**: Choose from a wide variety of color schemes (from Fiori_Search)
 - **Multi-format Support**: Convert various file formats to Markdown
-- **Drag & Drop**: Simply drag and drop files or folders into the application
+- **Enhanced Drag & Drop**: Visual drag-and-drop zone with clear indicators
+- **Smart Output**: Save converted files in the same directory as source files (default)
 - **Batch Processing**: Convert multiple files at once
 - **Progress Tracking**: Real-time progress bar and detailed conversion log
 - **User-Friendly Interface**: Clean, modern GUI built with PyQt6
+- **Persistent Settings**: Your theme and preferences are saved automatically
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 
 ## Supported File Formats
@@ -70,23 +73,40 @@ chmod +x markitdown_gui.py
 
 ### Using the GUI
 
-1. **Add Files**:
+1. **Choose a Theme** (Optional):
+   - Go to the "Themes" menu at the top
+   - Select from 47 beautiful color schemes
+   - Your choice is saved automatically
+
+2. **Add Files**:
+   - **Drag and Drop**: Simply drag files or folders into the drop zone
    - Click "Add Files" to select individual files
    - Click "Add Folder" to add all supported files from a directory
-   - Drag and drop files or folders directly into the file list
 
-2. **Select Output Directory**:
-   - Specify where you want the converted Markdown files to be saved
-   - Default is your Documents folder
+3. **Configure Output**:
+   - **Default (Recommended)**: Files are saved in the same directory as the source
+   - **Custom Directory**: Uncheck the box and specify a custom output folder
 
-3. **Convert**:
+4. **Convert**:
    - Click "Convert to Markdown" to start the conversion process
    - Monitor progress in the progress bar and log area
    - Click "Stop" to cancel the conversion if needed
 
-4. **Manage Files**:
+5. **Manage Files**:
    - Select files in the list and click "Remove Selected" to remove them
    - Click "Clear All" to remove all files from the list
+
+### Theme Gallery
+
+The application includes 47 themes from various categories:
+
+**Dark Themes**: Espresso, Atom, GruvboxDark, GitHub Dark, catppuccin-mocha, cyberpunk, ayu, Batman, matrix, The Hulk
+
+**Light Themes**: Github, PencilLight, Novel, nord-light, zenbones, neobones_light, coffee_theme
+
+**Colorful Themes**: Spiderman, Jackie Brown, MonaLisa, Sakura, Ocean, Red Alert, Grass
+
+**And many more!** Try them all to find your favorite.
 
 ## Advanced Usage
 
@@ -117,7 +137,12 @@ md = MarkItDown(llm_client=client, llm_model="gpt-4o")
 ```
 MarkItDown_GUI/
 ├── markitdown_gui.py    # Main application file
+├── theme_manager.py     # Theme management system
+├── themes/
+│   └── themes.json      # 47 color scheme definitions
+├── config.json          # User preferences (auto-generated)
 ├── requirements.txt     # Python dependencies
+├── .gitignore          # Git ignore rules
 └── README.md           # This file
 ```
 
