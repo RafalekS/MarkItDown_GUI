@@ -38,7 +38,7 @@ class MultiConverter:
         except ImportError:
             pass
 
-        # Check Pypandoc
+        # Check Pypandoc (NOT for PDFs - doesn't support PDF input)
         try:
             import pypandoc
             # Check if pandoc binary is available
@@ -51,6 +51,13 @@ class MultiConverter:
         try:
             import pymupdf4llm
             self.available_converters.append('pymupdf')
+        except ImportError:
+            pass
+
+        # Check pdfplumber for PDF text extraction
+        try:
+            import pdfplumber
+            self.available_converters.append('pdfplumber')
         except ImportError:
             pass
 
@@ -152,6 +159,70 @@ class MultiConverter:
                 error_message=str(e)
             )
 
+    def convert_with_pdfplumber(self, file_path: str) -> ConversionResult:
+        """
+        Convert PDF using pdfplumber.
+        Best for: PDF files with tables and structured content
+        """
+        try:
+            import pdfplumber
+
+            # Only works with PDFs
+            ext = Path(file_path).suffix.lower()
+            if ext != '.pdf':
+                return ConversionResult(
+                    success=False,
+                    content='',
+                    converter_used='pdfplumber',
+                    error_message='pdfplumber only handles PDF files'
+                )
+
+            # Extract text from PDF
+            text_content = []
+            with pdfplumber.open(file_path) as pdf:
+                for page_num, page in enumerate(pdf.pages, 1):
+                    # Add page header
+                    text_content.append(f"\n## Page {page_num}\n")
+
+                    # Extract text
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_content.append(page_text)
+
+                    # Extract tables
+                    tables = page.extract_tables()
+                    for table in tables:
+                        if table:
+                            # Convert table to markdown
+                            text_content.append("\n")
+                            for row in table:
+                                text_content.append("| " + " | ".join(str(cell) if cell else "" for cell in row) + " |")
+                            text_content.append("\n")
+
+            md_text = "\n".join(text_content)
+
+            if md_text and len(md_text.strip()) > 0:
+                return ConversionResult(
+                    success=True,
+                    content=md_text,
+                    converter_used='pdfplumber'
+                )
+            else:
+                return ConversionResult(
+                    success=False,
+                    content='',
+                    converter_used='pdfplumber',
+                    error_message='No text extracted from PDF'
+                )
+
+        except Exception as e:
+            return ConversionResult(
+                success=False,
+                content='',
+                converter_used='pdfplumber',
+                error_message=str(e)
+            )
+
     def convert_with_pymupdf(self, file_path: str) -> ConversionResult:
         """
         Convert PDF using PyMuPDF4LLM.
@@ -225,7 +296,8 @@ class MultiConverter:
             # Auto mode: define optimal strategy per file type
             if ext == '.pdf':
                 # For PDFs: try MarkItDown first, then specialized PDF tools
-                strategies = ['markitdown', 'pymupdf', 'pypandoc']
+                # Note: pypandoc does NOT support PDF input
+                strategies = ['markitdown', 'pymupdf', 'pdfplumber']
             elif ext in ['.docx', '.pptx', '.xlsx']:
                 # For Office: MarkItDown is best, then Pypandoc
                 strategies = ['markitdown', 'pypandoc']
@@ -233,8 +305,8 @@ class MultiConverter:
                 # For HTML: Pypandoc is great, MarkItDown works too
                 strategies = ['markitdown', 'pypandoc']
             else:
-                # For others: try all in order
-                strategies = ['markitdown', 'pypandoc', 'pymupdf']
+                # For others: try MarkItDown first, then Pypandoc
+                strategies = ['markitdown', 'pypandoc']
 
         # Filter to only available converters
         strategies = [s for s in strategies if s in self.available_converters]
@@ -255,6 +327,8 @@ class MultiConverter:
                 result = self.convert_with_pypandoc(file_path)
             elif converter_name == 'pymupdf':
                 result = self.convert_with_pymupdf(file_path)
+            elif converter_name == 'pdfplumber':
+                result = self.convert_with_pdfplumber(file_path)
             else:
                 continue
 

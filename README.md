@@ -10,8 +10,9 @@ A modern PyQt6 GUI application for converting various document formats to Markdo
 
 - **🎯 Multi-Converter Fallback System**: Automatically tries multiple converters for maximum success
   - **MarkItDown** (Microsoft) - Primary converter
-  - **Pypandoc** (Universal) - Fallback for all formats
-  - **PyMuPDF** - Specialized PDF converter
+  - **Pypandoc** (Universal) - Fallback for non-PDF formats
+  - **PyMuPDF** - Specialized PDF converter #1
+  - **pdfplumber** - Specialized PDF converter #2 (with table support)
 - **🎨 47 Beautiful Themes**: Choose from a wide variety of color schemes (from Fiori_Search)
 - **📦 Multi-format Support**: Convert PDF, DOCX, PPTX, XLSX, HTML, images, audio, and more
 - **🎪 Enhanced Drag & Drop**: Visual drag-and-drop zone with clear indicators
@@ -62,7 +63,7 @@ pip install -r requirements.txt
 
 Or install manually:
 ```bash
-pip install PyQt6 'markitdown[all]' pypandoc pymupdf4llm
+pip install PyQt6 'markitdown[all]' pypandoc pymupdf4llm pdfplumber
 ```
 
 ## Usage
@@ -91,8 +92,9 @@ chmod +x markitdown_gui.py
 2. **Select Converter Strategy**:
    - **Auto (Recommended)**: Automatically tries multiple converters for best results
    - **MarkItDown Only**: Use only Microsoft's converter
-   - **Pypandoc Only**: Use only Pandoc
+   - **Pypandoc Only**: Use only Pandoc (NOT for PDFs)
    - **PyMuPDF Only**: Use only PyMuPDF (for PDFs)
+   - **pdfplumber Only**: Use only pdfplumber (for PDFs with tables)
 
 3. **Add Files**:
    - **Drag and Drop**: Simply drag files or folders into the drop zone
@@ -132,10 +134,11 @@ The application uses a smart fallback system to maximize conversion success:
 ### How It Works
 
 1. **Auto Mode (Recommended)**:
-   - For PDFs: MarkItDown → PyMuPDF → Pypandoc
+   - For PDFs: MarkItDown → PyMuPDF → pdfplumber
    - For Office files: MarkItDown → Pypandoc
    - For HTML: MarkItDown → Pypandoc
    - Automatically selects the best strategy per file type
+   - **Note**: Pypandoc does NOT support PDF input
 
 2. **Manual Selection**:
    - Choose a specific converter if you know what works best
@@ -149,8 +152,9 @@ The application uses a smart fallback system to maximize conversion success:
 ### Which Converter to Use?
 
 - **MarkItDown**: Best for most files, especially Office documents and images
-- **Pypandoc**: Universal converter, great for HTML and text formats
-- **PyMuPDF**: Specialized for PDFs, especially scanned documents
+- **Pypandoc**: Universal converter for DOCX, HTML, and text formats (NOT for PDFs!)
+- **PyMuPDF**: Specialized for PDFs, handles most PDF types
+- **pdfplumber**: Excellent for PDFs with tables and structured content
 
 ## Advanced Usage
 
@@ -216,9 +220,10 @@ MarkItDown_GUI/
 - **markitdown**: Microsoft's document-to-Markdown converter (primary)
 
 ### Highly Recommended
-- **pypandoc**: Python wrapper for Pandoc (universal fallback)
+- **pypandoc**: Python wrapper for Pandoc (universal fallback for non-PDFs)
 - **Pandoc**: Universal document converter (system package)
 - **pymupdf4llm**: Specialized PDF converter
+- **pdfplumber**: PDF text and table extractor
 
 See `requirements.txt` for specific versions.
 
@@ -236,6 +241,8 @@ See `requirements.txt` for specific versions.
 - Check the log area for specific error messages
 - Ensure files are not corrupted
 - Verify you have write permissions to the output directory
+- For PDFs: Install `pip install pymupdf4llm pdfplumber` for better success
+- **Note**: Some scanned PDFs (image-only) cannot be converted without OCR
 
 **Images not generating descriptions**
 - This requires LLM integration (see Advanced Usage section)

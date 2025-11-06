@@ -293,14 +293,16 @@ class MarkItDownGUI(QMainWindow):
             "Auto (Smart Fallback)",
             "MarkItDown Only",
             "Pypandoc Only",
-            "PyMuPDF Only (PDF)"
+            "PyMuPDF Only (PDF)",
+            "pdfplumber Only (PDF)"
         ])
         self.converter_combo.setCurrentIndex(0)
         self.converter_combo.setToolTip(
             "Auto: Tries multiple converters for best results\n"
             "MarkItDown: Microsoft's converter (primary)\n"
-            "Pypandoc: Universal converter (fallback)\n"
-            "PyMuPDF: Specialized PDF converter"
+            "Pypandoc: Universal converter (NOT for PDFs)\n"
+            "PyMuPDF: Specialized PDF converter\n"
+            "pdfplumber: PDF text & table extractor"
         )
         converter_layout.addWidget(self.converter_combo)
         converter_layout.addStretch()
@@ -453,8 +455,9 @@ class MarkItDownGUI(QMainWindow):
             "• Smart output directory\n\n"
             "Converters:\n"
             "• MarkItDown (Microsoft)\n"
-            "• Pypandoc (Universal)\n"
-            "• PyMuPDF (PDF specialist)\n\n"
+            "• Pypandoc (Universal, NOT PDFs)\n"
+            "• PyMuPDF (PDF specialist)\n"
+            "• pdfplumber (PDF text & tables)\n\n"
             "Theme system from Fiori_Search"
         )
 
@@ -636,7 +639,8 @@ class MarkItDownGUI(QMainWindow):
             "Auto (Smart Fallback)": "auto",
             "MarkItDown Only": "markitdown",
             "Pypandoc Only": "pypandoc",
-            "PyMuPDF Only (PDF)": "pymupdf"
+            "PyMuPDF Only (PDF)": "pymupdf",
+            "pdfplumber Only (PDF)": "pdfplumber"
         }
         converter_pref = converter_map.get(
             self.converter_combo.currentText(),
