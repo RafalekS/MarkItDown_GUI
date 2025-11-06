@@ -12,11 +12,10 @@ from typing import List, Optional, Dict
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QListWidget, QLabel, QFileDialog, QTextEdit,
-    QLineEdit, QGroupBox, QProgressBar, QMessageBox, QListWidgetItem,
-    QCheckBox, QSpinBox, QMenu
+    QLineEdit, QGroupBox, QProgressBar, QMessageBox, QListWidgetItem
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QMimeData
-from PyQt6.QtGui import QIcon, QDragEnterEvent, QDropEvent, QAction
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QAction
 from markitdown import MarkItDown
 from theme_manager import ThemeManager
 
@@ -61,12 +60,17 @@ class ConversionWorker(QThread):
                     self.log.emit("Conversion stopped by user")
                     break
 
+                file_name = os.path.basename(file_path)
+
                 try:
-                    file_name = os.path.basename(file_path)
                     self.log.emit(f"Converting: {file_name}")
 
                     # Convert file
                     result = md.convert(file_path)
+
+                    # Check if result is empty or None
+                    if not result or not result.text_content:
+                        raise Exception("Conversion resulted in empty content")
 
                     # Determine output directory
                     if self.use_source_dir:
@@ -93,8 +97,9 @@ class ConversionWorker(QThread):
                     self.progress.emit(idx + 1, total)
 
                 except Exception as e:
-                    self.error.emit(file_name, str(e))
-                    self.log.emit(f"✗ Error converting {file_name}: {str(e)}")
+                    error_msg = str(e)
+                    self.error.emit(file_name, error_msg)
+                    self.log.emit(f"✗ Error converting {file_name}: {error_msg}")
                     self.progress.emit(idx + 1, total)
 
             if self._is_running:
@@ -119,6 +124,47 @@ class DragDropLabel(QLabel):
                 opacity: 0.6;
             }
         """)
+
+
+class DragDropListWidget(QListWidget):
+    """Custom QListWidget with drag and drop support"""
+
+    files_dropped = pyqtSignal(list)  # Signal emitted when files are dropped
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        """Handle drag enter event"""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        """Handle drag move event"""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent):
+        """Handle drop event"""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+            files = []
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if file_path:
+                    files.append(file_path)
+
+            if files:
+                self.files_dropped.emit(files)
+        else:
+            event.ignore()
 
 
 class MarkItDownGUI(QMainWindow):
@@ -199,18 +245,14 @@ class MarkItDownGUI(QMainWindow):
 
         # Drag and drop hint label
         self.drag_hint_label = DragDropLabel(
-            "Drag and drop files or folders here\n"
+            "📁 Drag and drop files or folders here 📁\n"
             "or use the buttons below to add files"
         )
         file_layout.addWidget(self.drag_hint_label)
 
-        # File list
-        self.file_list = QListWidget()
-        self.file_list.setAcceptDrops(True)
-        self.file_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
-        self.file_list.dragEnterEvent = self.drag_enter_event
-        self.file_list.dropEvent = self.drop_event
-        self.file_list.dragLeaveEvent = self.drag_leave_event
+        # File list with drag-drop support
+        self.file_list = DragDropListWidget()
+        self.file_list.files_dropped.connect(self.handle_dropped_files)
         self.file_list.setMinimumHeight(150)
         file_layout.addWidget(self.file_list)
 
@@ -243,7 +285,7 @@ class MarkItDownGUI(QMainWindow):
 
         # Use source directory checkbox
         self.use_source_dir_checkbox = QCheckBox(
-            "Save converted files in the same directory as source files"
+            "✓ Save converted files in the same directory as source files (Recommended)"
         )
         self.use_source_dir_checkbox.setChecked(self.config.get("use_source_dir", True))
         self.use_source_dir_checkbox.stateChanged.connect(self.on_use_source_dir_changed)
@@ -295,7 +337,7 @@ class MarkItDownGUI(QMainWindow):
         convert_btn_layout = QHBoxLayout()
         convert_btn_layout.addStretch()
 
-        self.convert_btn = QPushButton("Convert to Markdown")
+        self.convert_btn = QPushButton("🚀 Convert to Markdown")
         self.convert_btn.setStyleSheet("""
             QPushButton {
                 font-size: 14px;
@@ -305,7 +347,7 @@ class MarkItDownGUI(QMainWindow):
         self.convert_btn.clicked.connect(self.start_conversion)
         convert_btn_layout.addWidget(self.convert_btn)
 
-        self.stop_btn = QPushButton("Stop")
+        self.stop_btn = QPushButton("⏹ Stop")
         self.stop_btn.setStyleSheet("""
             QPushButton {
                 font-size: 14px;
@@ -320,7 +362,7 @@ class MarkItDownGUI(QMainWindow):
         main_layout.addLayout(convert_btn_layout)
 
         # Status bar
-        self.statusBar().showMessage("Ready")
+        self.statusBar().showMessage("Ready - Drag and drop files to get started!")
 
         # Info label
         info_label = QLabel(
@@ -338,7 +380,7 @@ class MarkItDownGUI(QMainWindow):
         menubar = self.menuBar()
 
         # Themes menu
-        themes_menu = menubar.addMenu("Themes")
+        themes_menu = menubar.addMenu("🎨 Themes")
 
         # Get all theme names
         theme_names = self.theme_manager.get_theme_names()
@@ -354,7 +396,7 @@ class MarkItDownGUI(QMainWindow):
             themes_menu.addAction(action)
 
         # Help menu
-        help_menu = menubar.addMenu("Help")
+        help_menu = menubar.addMenu("❓ Help")
 
         about_action = QAction("About", self)
         about_action.triggered.connect(self.show_about)
@@ -377,13 +419,14 @@ class MarkItDownGUI(QMainWindow):
         QMessageBox.about(
             self,
             "About MarkItDown GUI",
-            "MarkItDown GUI v2.0\n\n"
+            "MarkItDown GUI v2.1\n\n"
             "A PyQt6 GUI for converting various document formats to Markdown.\n\n"
             "Features:\n"
             "• 47 beautiful themes\n"
-            "• Drag and drop support\n"
+            "• Enhanced drag and drop support\n"
             "• Batch conversion\n"
-            "• Multiple file format support\n\n"
+            "• Multiple file format support\n"
+            "• Smart output directory\n\n"
             "Powered by Microsoft MarkItDown\n"
             "Theme system from Fiori_Search"
         )
@@ -402,20 +445,10 @@ class MarkItDownGUI(QMainWindow):
         """Show or hide drag hint label based on file list"""
         self.drag_hint_label.setVisible(len(self.files_to_convert) == 0)
 
-    def drag_enter_event(self, event: QDragEnterEvent):
-        """Handle drag enter event"""
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-
-    def drag_leave_event(self, event):
-        """Handle drag leave event"""
-        pass
-
-    def drop_event(self, event: QDropEvent):
-        """Handle drop event"""
+    def handle_dropped_files(self, file_paths: List[str]):
+        """Handle files dropped onto the list widget"""
         files = []
-        for url in event.mimeData().urls():
-            file_path = url.toLocalFile()
+        for file_path in file_paths:
             if os.path.isfile(file_path):
                 files.append(file_path)
             elif os.path.isdir(file_path):
@@ -423,7 +456,7 @@ class MarkItDownGUI(QMainWindow):
 
         if files:
             self.add_files_to_list(files)
-            self.log(f"Added {len(files)} file(s) via drag and drop")
+            self.log(f"📥 Added {len(files)} file(s) via drag and drop")
 
     def add_files(self):
         """Open file dialog to add files"""
@@ -452,7 +485,7 @@ class MarkItDownGUI(QMainWindow):
                 self.add_files_to_list(files)
                 self.log(f"Added {len(files)} file(s) from folder")
             else:
-                self.log("No supported files found in the selected folder")
+                self.log("⚠️ No supported files found in the selected folder")
 
     def get_supported_files_from_dir(self, directory: str) -> List[str]:
         """Get all supported files from a directory"""
@@ -472,14 +505,17 @@ class MarkItDownGUI(QMainWindow):
 
     def add_files_to_list(self, files: List[str]):
         """Add files to the list widget"""
+        added = 0
         for file_path in files:
             if file_path not in self.files_to_convert:
                 self.files_to_convert.append(file_path)
-                item = QListWidgetItem(file_path)
+                item = QListWidgetItem(f"📄 {file_path}")
                 self.file_list.addItem(item)
+                added += 1
 
-        self.statusBar().showMessage(f"Total files: {len(self.files_to_convert)}")
-        self.update_drag_hint_visibility()
+        if added > 0:
+            self.statusBar().showMessage(f"Total files: {len(self.files_to_convert)}")
+            self.update_drag_hint_visibility()
 
     def remove_selected(self):
         """Remove selected files from the list"""
@@ -488,7 +524,7 @@ class MarkItDownGUI(QMainWindow):
             return
 
         for item in selected_items:
-            file_path = item.text()
+            file_path = item.text().replace("📄 ", "")
             if file_path in self.files_to_convert:
                 self.files_to_convert.remove(file_path)
             self.file_list.takeItem(self.file_list.row(item))
@@ -502,7 +538,7 @@ class MarkItDownGUI(QMainWindow):
         self.files_to_convert.clear()
         self.file_list.clear()
         self.log("Cleared all files")
-        self.statusBar().showMessage("Ready")
+        self.statusBar().showMessage("Ready - Drag and drop files to get started!")
         self.update_drag_hint_visibility()
 
     def browse_output_dir(self):
@@ -529,7 +565,8 @@ class MarkItDownGUI(QMainWindow):
             QMessageBox.warning(
                 self,
                 "No Files",
-                "Please add files to convert first."
+                "Please add files to convert first.\n\n"
+                "Tip: Drag and drop files into the file list!"
             )
             return
 
@@ -564,7 +601,8 @@ class MarkItDownGUI(QMainWindow):
 
         # Clear log
         self.log_text.clear()
-        self.log("Starting conversion...")
+        self.log("🚀 Starting conversion...")
+        self.log(f"📊 Files to convert: {len(self.files_to_convert)}")
 
         # Create and start worker thread
         self.worker = ConversionWorker(
@@ -581,7 +619,7 @@ class MarkItDownGUI(QMainWindow):
     def stop_conversion(self):
         """Stop the conversion process"""
         if self.worker and self.worker.isRunning():
-            self.log("Stopping conversion...")
+            self.log("⏹ Stopping conversion...")
             self.worker.stop()
             self.worker.wait()
 
@@ -589,7 +627,7 @@ class MarkItDownGUI(QMainWindow):
         """Update progress bar"""
         progress = int((current / total) * 100)
         self.progress_bar.setValue(progress)
-        self.statusBar().showMessage(f"Converting: {current}/{total} files")
+        self.statusBar().showMessage(f"Converting: {current}/{total} files ({progress}%)")
 
     def handle_error(self, filename: str, error_msg: str):
         """Handle conversion error"""
@@ -602,15 +640,15 @@ class MarkItDownGUI(QMainWindow):
         self.convert_btn.setVisible(True)
         self.stop_btn.setVisible(False)
         self.file_list.setEnabled(True)
-        self.statusBar().showMessage("Conversion complete")
+        self.statusBar().showMessage("✓ Conversion complete")
 
         # Show completion message
         use_source_dir = self.use_source_dir_checkbox.isChecked()
         if use_source_dir:
-            msg = f"Converted {len(self.files_to_convert)} file(s) to Markdown.\n" \
+            msg = f"✓ Converted {len(self.files_to_convert)} file(s) to Markdown.\n\n" \
                   f"Files saved in their respective source directories."
         else:
-            msg = f"Converted {len(self.files_to_convert)} file(s) to Markdown.\n" \
+            msg = f"✓ Converted {len(self.files_to_convert)} file(s) to Markdown.\n\n" \
                   f"Output directory: {self.output_dir_edit.text()}"
 
         QMessageBox.information(
