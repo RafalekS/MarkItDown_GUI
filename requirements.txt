@@ -14,6 +14,14 @@ pdfplumber>=0.11.0
 marker-pdf>=0.2.0
 pypdf>=4.0.0
 
+# OCR for scanned PDFs (requires Tesseract-OCR system package)
+# Windows: https://github.com/UB-Mannheim/tesseract/wiki
+# Mac: brew install tesseract
+# Linux: sudo apt install tesseract-ocr
+pytesseract>=0.3.10
+pdf2image>=1.16.3
+# Also requires poppler: https://pypi.org/project/pdf2image/
+
 # Optional: For LLM integration (image descriptions, audio transcription)
 # Uncomment if you want to use OpenAI or other LLM providers
 # openai>=1.0.0

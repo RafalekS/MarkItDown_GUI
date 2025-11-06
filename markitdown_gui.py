@@ -296,17 +296,19 @@ class MarkItDownGUI(QMainWindow):
             "Marker Only (PDF - Best)",
             "PyMuPDF Only (PDF)",
             "pdfplumber Only (PDF)",
-            "PyPDF Only (PDF - Simple)"
+            "PyPDF Only (PDF - Simple)",
+            "OCR Only (Scanned PDFs)"
         ])
         self.converter_combo.setCurrentIndex(0)
         self.converter_combo.setToolTip(
-            "Auto: Tries multiple converters for best results\n"
+            "Auto: Tries multiple converters for best results (6 for PDFs!)\n"
             "MarkItDown: Microsoft's converter (fast, primary)\n"
             "Pypandoc: Universal converter (NOT for PDFs)\n"
             "Marker: Advanced PDF converter (best for complex PDFs)\n"
             "PyMuPDF: Fast PDF converter\n"
             "pdfplumber: PDF text & table extractor\n"
-            "PyPDF: Simple PDF text extractor (basic)"
+            "PyPDF: Simple PDF text extractor (basic)\n"
+            "OCR: For scanned PDFs (requires Tesseract)"
         )
         converter_layout.addWidget(self.converter_combo)
         converter_layout.addStretch()
@@ -463,6 +465,7 @@ class MarkItDownGUI(QMainWindow):
             "• PyMuPDF (PDF - Fast)\n"
             "• pdfplumber (PDF tables)\n"
             "• PyPDF (PDF - Simple)\n"
+            "• OCR/Tesseract (Scanned PDFs)\n"
             "• Pypandoc (NOT for PDFs)\n\n"
             "Theme system from Fiori_Search"
         )
@@ -648,7 +651,8 @@ class MarkItDownGUI(QMainWindow):
             "Marker Only (PDF - Best)": "marker",
             "PyMuPDF Only (PDF)": "pymupdf",
             "pdfplumber Only (PDF)": "pdfplumber",
-            "PyPDF Only (PDF - Simple)": "pypdf"
+            "PyPDF Only (PDF - Simple)": "pypdf",
+            "OCR Only (Scanned PDFs)": "ocr"
         }
         converter_pref = converter_map.get(
             self.converter_combo.currentText(),

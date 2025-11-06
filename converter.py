@@ -75,6 +75,16 @@ class MultiConverter:
         except ImportError:
             pass
 
+        # Check OCR tools for scanned PDFs
+        try:
+            import pytesseract
+            import pdf2image
+            # Try to get tesseract version to verify it's installed
+            pytesseract.get_tesseract_version()
+            self.available_converters.append('ocr')
+        except (ImportError, Exception):
+            pass
+
     def convert_with_markitdown(self, file_path: str) -> ConversionResult:
         """
         Convert using Microsoft MarkItDown.
@@ -336,6 +346,74 @@ class MultiConverter:
                 error_message=str(e)
             )
 
+    def convert_with_ocr(self, file_path: str) -> ConversionResult:
+        """
+        Convert PDF using OCR (Optical Character Recognition).
+        Best for: Scanned PDFs, image-based PDFs with no extractable text
+        Requires: Tesseract-OCR system package
+        """
+        try:
+            import pytesseract
+            from pdf2image import convert_from_path
+
+            # Only works with PDFs
+            ext = Path(file_path).suffix.lower()
+            if ext != '.pdf':
+                return ConversionResult(
+                    success=False,
+                    content='',
+                    converter_used='OCR',
+                    error_message='OCR only handles PDF files'
+                )
+
+            # Convert PDF pages to images
+            try:
+                images = convert_from_path(file_path, dpi=300)
+            except Exception as e:
+                return ConversionResult(
+                    success=False,
+                    content='',
+                    converter_used='OCR',
+                    error_message=f'Failed to convert PDF to images: {str(e)}'
+                )
+
+            # OCR each page
+            text_content = []
+            for page_num, image in enumerate(images, 1):
+                text_content.append(f"\n## Page {page_num}\n")
+
+                # Perform OCR on the image
+                try:
+                    page_text = pytesseract.image_to_string(image, lang='eng')
+                    if page_text:
+                        text_content.append(page_text)
+                except Exception as e:
+                    text_content.append(f"[OCR Error on page {page_num}: {str(e)}]\n")
+
+            md_text = "\n".join(text_content)
+
+            if md_text and len(md_text.strip()) > 0:
+                return ConversionResult(
+                    success=True,
+                    content=md_text,
+                    converter_used='OCR (Tesseract)'
+                )
+            else:
+                return ConversionResult(
+                    success=False,
+                    content='',
+                    converter_used='OCR',
+                    error_message='No text extracted via OCR'
+                )
+
+        except Exception as e:
+            return ConversionResult(
+                success=False,
+                content='',
+                converter_used='OCR',
+                error_message=str(e)
+            )
+
     def convert_with_pymupdf(self, file_path: str) -> ConversionResult:
         """
         Convert PDF using PyMuPDF4LLM.
@@ -410,8 +488,8 @@ class MultiConverter:
             if ext == '.pdf':
                 # For PDFs: try multiple specialized converters
                 # Note: pypandoc does NOT support PDF input
-                # Order: MarkItDown (fast) → marker (accurate) → PyMuPDF → pdfplumber → pypdf (simple)
-                strategies = ['markitdown', 'marker', 'pymupdf', 'pdfplumber', 'pypdf']
+                # Order: MarkItDown (fast) → marker (accurate) → PyMuPDF → pdfplumber → pypdf → OCR (scanned)
+                strategies = ['markitdown', 'marker', 'pymupdf', 'pdfplumber', 'pypdf', 'ocr']
             elif ext in ['.docx', '.pptx', '.xlsx']:
                 # For Office: MarkItDown is best, then Pypandoc
                 strategies = ['markitdown', 'pypandoc']
@@ -447,6 +525,8 @@ class MultiConverter:
                 result = self.convert_with_marker(file_path)
             elif converter_name == 'pypdf':
                 result = self.convert_with_pypdf(file_path)
+            elif converter_name == 'ocr':
+                result = self.convert_with_ocr(file_path)
             else:
                 continue
 

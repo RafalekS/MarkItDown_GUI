@@ -14,6 +14,7 @@ A modern PyQt6 GUI application for converting various document formats to Markdo
   - **PyMuPDF** - Fast PDF converter
   - **pdfplumber** - PDF with table support
   - **PyPDF** - Simple PDF text extraction
+  - **OCR (Tesseract)** - Scanned PDFs and image-based documents
   - **Pypandoc** (Universal) - For non-PDF formats only
 - **🎨 47 Beautiful Themes**: Choose from a wide variety of color schemes (from Fiori_Search)
 - **📦 Multi-format Support**: Convert PDF, DOCX, PPTX, XLSX, HTML, images, audio, and more
@@ -31,7 +32,7 @@ A modern PyQt6 GUI application for converting various document formats to Markdo
 The application supports conversion of the following file formats to Markdown:
 
 - **Office Documents**: DOCX, PPTX, XLSX, XLS
-- **PDF**: PDF files
+- **PDF**: PDF files (including scanned/image-based PDFs with OCR)
 - **Web**: HTML, HTM
 - **Text**: TXT, CSV, JSON, XML
 - **Images**: JPG, JPEG, PNG (with optional LLM integration for descriptions)
@@ -58,14 +59,31 @@ cd MarkItDown_GUI
    - **macOS**: `brew install pandoc`
    - **Linux**: `sudo apt install pandoc` (Ubuntu/Debian) or `sudo yum install pandoc` (RHEL/CentOS)
 
-3. Install Python packages:
+3. **Install Tesseract-OCR** (required for scanned PDF support):
+   - **Windows**: Download installer from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
+     - Download `tesseract-ocr-w64-setup-5.x.x.exe` (latest version)
+     - Run installer and note the installation path (default: `C:\Program Files\Tesseract-OCR`)
+     - Add Tesseract to PATH: `setx PATH "%PATH%;C:\Program Files\Tesseract-OCR"`
+     - Restart your terminal/command prompt
+   - **macOS**: `brew install tesseract`
+   - **Linux**: `sudo apt install tesseract-ocr` (Ubuntu/Debian) or `sudo yum install tesseract` (RHEL/CentOS)
+
+4. **Install Poppler** (required for pdf2image used by OCR):
+   - **Windows**: Download from [oschwartz10612/poppler-windows](https://github.com/oschwartz10612/poppler-windows/releases)
+     - Download `Release-xx.xx.x-0.zip`
+     - Extract to a location like `C:\Program Files\poppler`
+     - Add `C:\Program Files\poppler\Library\bin` to PATH
+   - **macOS**: `brew install poppler`
+   - **Linux**: `sudo apt install poppler-utils` (Ubuntu/Debian) or `sudo yum install poppler-utils` (RHEL/CentOS)
+
+5. Install Python packages:
 ```bash
 pip install -r requirements.txt
 ```
 
 Or install manually:
 ```bash
-pip install PyQt6 'markitdown[all]' pypandoc pymupdf4llm pdfplumber marker-pdf pypdf
+pip install PyQt6 'markitdown[all]' pypandoc pymupdf4llm pdfplumber marker-pdf pypdf pytesseract pdf2image
 ```
 
 **Note**: marker-pdf will download AI models (~500MB) on first use for better PDF accuracy.
@@ -94,12 +112,13 @@ chmod +x markitdown_gui.py
    - Your choice is saved automatically
 
 2. **Select Converter Strategy**:
-   - **Auto (Recommended)**: Automatically tries up to 5 PDF converters for best results
+   - **Auto (Recommended)**: Automatically tries up to 6 PDF converters for best results
    - **MarkItDown Only**: Use only Microsoft's converter (fast)
    - **Marker Only**: Use advanced PDF converter (best for complex PDFs)
    - **PyMuPDF Only**: Fast PDF converter
    - **pdfplumber Only**: PDF with table support
    - **PyPDF Only**: Simple PDF text extraction
+   - **OCR Only (Scanned PDFs)**: Use Tesseract OCR for image-based PDFs
    - **Pypandoc Only**: For non-PDFs only
 
 3. **Add Files**:
@@ -140,12 +159,12 @@ The application uses a smart fallback system to maximize conversion success:
 ### How It Works
 
 1. **Auto Mode (Recommended)**:
-   - For PDFs: MarkItDown → Marker → PyMuPDF → pdfplumber → PyPDF
+   - For PDFs: MarkItDown → Marker → PyMuPDF → pdfplumber → PyPDF → OCR (Tesseract)
    - For Office files: MarkItDown → Pypandoc
    - For HTML: MarkItDown → Pypandoc
    - Automatically selects the best strategy per file type
    - **Note**: Pypandoc does NOT support PDF input
-   - **5 PDF converters** ensure maximum success rate!
+   - **6 PDF converters** ensure maximum success rate, including OCR for scanned PDFs!
 
 2. **Manual Selection**:
    - Choose a specific converter if you know what works best
@@ -163,6 +182,7 @@ The application uses a smart fallback system to maximize conversion success:
 - **PyMuPDF**: Fast PDF converter, good for general PDFs
 - **pdfplumber**: Good for PDFs with tables and structured content
 - **PyPDF**: Simple PDF text extraction (basic fallback)
+- **OCR (Tesseract)**: Essential for scanned PDFs and image-based documents (slower, requires system packages)
 - **Pypandoc**: Universal converter for DOCX, HTML, and text formats (NOT for PDFs!)
 
 ## Advanced Usage
@@ -217,7 +237,7 @@ MarkItDown_GUI/
 ### Key Components
 
 1. **File Selection**: Multiple ways to add files (dialog, folder, drag-and-drop)
-2. **Multi-Converter Engine**: Intelligent fallback system with 3 converters
+2. **Multi-Converter Engine**: Intelligent fallback system with 6 PDF converters (including OCR)
 3. **Progress Tracking**: Real-time updates via Qt signals
 4. **Error Handling**: Graceful error handling with automatic fallback
 5. **Theme System**: 47 pre-defined color schemes with live switching
@@ -236,6 +256,12 @@ MarkItDown_GUI/
 - **pdfplumber**: PDF text and table extractor
 - **pypdf**: Simple PDF text extraction
 
+### OCR Support (for scanned PDFs)
+- **pytesseract**: Python wrapper for Tesseract-OCR
+- **pdf2image**: Converts PDF pages to images for OCR
+- **Tesseract-OCR**: OCR engine (system package - see installation instructions above)
+- **Poppler**: PDF rendering library (system package - required by pdf2image)
+
 See `requirements.txt` for specific versions.
 
 ## Troubleshooting
@@ -252,8 +278,23 @@ See `requirements.txt` for specific versions.
 - Check the log area for specific error messages
 - Ensure files are not corrupted
 - Verify you have write permissions to the output directory
-- For PDFs: Install `pip install pymupdf4llm pdfplumber` for better success
-- **Note**: Some scanned PDFs (image-only) cannot be converted without OCR
+- For PDFs: Install `pip install pymupdf4llm pdfplumber pypdf` for better success
+- For scanned PDFs: Install Tesseract-OCR and Poppler (see installation instructions above)
+
+**OCR not working for scanned PDFs**
+- Verify Tesseract is installed: Run `tesseract --version` in terminal
+- Verify Tesseract is in PATH (Windows users check System Environment Variables)
+- Verify Poppler is installed and in PATH
+- Error "pytesseract.pytesseract.TesseractNotFoundError": Tesseract binary not found in PATH
+- Error "Unable to get page count": Poppler not installed or not in PATH
+- Windows users: After installing Tesseract/Poppler, restart your terminal/command prompt
+- Try selecting "OCR Only" mode to test if OCR is working properly
+
+**OCR produces poor quality text**
+- OCR quality depends on scan quality of the source PDF
+- Low resolution or poor quality scans will produce poor results
+- Consider rescanning the document at higher DPI (300+ recommended)
+- Some complex layouts (multi-column, tables) may not convert perfectly
 
 **Images not generating descriptions**
 - This requires LLM integration (see Advanced Usage section)
