@@ -171,6 +171,7 @@ class DragDropListWidget(QListWidget):
             event.ignore()
 
 
+class SettingsDialog(QDialog):
     """Comprehensive settings dialog for all converter configurations"""
 
     def __init__(self, config: Dict, parent=None):
