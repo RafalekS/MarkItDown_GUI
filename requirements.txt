@@ -1,6 +1,15 @@
 # Core dependencies
-markitdown[all]>=0.1.0
 PyQt6>=6.6.0
+
+# Primary converter (required)
+markitdown[all]>=0.1.0
+
+# Fallback converters (highly recommended for robust conversion)
+# Install pandoc system package first: https://pandoc.org/installing.html
+pypandoc>=1.13
+
+# Specialized PDF converter (optional but recommended for PDFs)
+pymupdf4llm>=0.0.5
 
 # Optional: For LLM integration (image descriptions, audio transcription)
 # Uncomment if you want to use OpenAI or other LLM providers

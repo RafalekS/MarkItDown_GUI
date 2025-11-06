@@ -12,12 +12,13 @@ from typing import List, Optional, Dict
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QListWidget, QLabel, QFileDialog, QTextEdit,
-    QLineEdit, QGroupBox, QProgressBar, QMessageBox, QListWidgetItem
+    QLineEdit, QGroupBox, QProgressBar, QMessageBox, QListWidgetItem,
+    QComboBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QAction
-from markitdown import MarkItDown
 from theme_manager import ThemeManager
+from converter import MultiConverter, ConversionResult
 
 
 class ConversionWorker(QThread):
@@ -29,13 +30,12 @@ class ConversionWorker(QThread):
     error = pyqtSignal(str, str)  # filename, error message
 
     def __init__(self, files: List[str], output_dir: str, use_source_dir: bool = True,
-                 llm_client=None, llm_model: Optional[str] = None):
+                 converter_preference: str = 'auto'):
         super().__init__()
         self.files = files
         self.output_dir = output_dir
         self.use_source_dir = use_source_dir
-        self.llm_client = llm_client
-        self.llm_model = llm_model
+        self.converter_preference = converter_preference
         self._is_running = True
 
     def stop(self):
@@ -45,13 +45,16 @@ class ConversionWorker(QThread):
     def run(self):
         """Convert files in background thread"""
         try:
-            # Initialize MarkItDown
-            if self.llm_client and self.llm_model:
-                md = MarkItDown(llm_client=self.llm_client, llm_model=self.llm_model)
-                self.log.emit("MarkItDown initialized with LLM support")
-            else:
-                md = MarkItDown()
-                self.log.emit("MarkItDown initialized")
+            # Initialize multi-converter
+            converter = MultiConverter()
+            available = converter.get_available_converters()
+
+            if not available:
+                self.log.emit("⚠️ No converters available! Install: pip install 'markitdown[all]' pypandoc pymupdf4llm")
+                return
+
+            self.log.emit(f"🔧 Available converters: {', '.join(available)}")
+            self.log.emit(f"📋 Strategy: {self.converter_preference}")
 
             total = len(self.files)
 
@@ -65,12 +68,11 @@ class ConversionWorker(QThread):
                 try:
                     self.log.emit(f"Converting: {file_name}")
 
-                    # Convert file
-                    result = md.convert(file_path)
+                    # Try conversion with fallback
+                    result = converter.convert(file_path, self.converter_preference)
 
-                    # Check if result is empty or None
-                    if not result or not result.text_content:
-                        raise Exception("Conversion resulted in empty content")
+                    if not result.success:
+                        raise Exception(result.error_message or "Conversion failed")
 
                     # Determine output directory
                     if self.use_source_dir:
@@ -91,9 +93,9 @@ class ConversionWorker(QThread):
 
                     # Save markdown
                     with open(output_path, 'w', encoding='utf-8') as f:
-                        f.write(result.text_content)
+                        f.write(result.content)
 
-                    self.log.emit(f"✓ Saved: {output_path}")
+                    self.log.emit(f"✓ Saved: {output_path} (via {result.converter_used})")
                     self.progress.emit(idx + 1, total)
 
                 except Exception as e:
@@ -283,6 +285,27 @@ class MarkItDownGUI(QMainWindow):
         output_group = QGroupBox("Output Settings")
         output_layout = QVBoxLayout()
 
+        # Converter strategy selection
+        converter_layout = QHBoxLayout()
+        converter_layout.addWidget(QLabel("Converter Strategy:"))
+        self.converter_combo = QComboBox()
+        self.converter_combo.addItems([
+            "Auto (Smart Fallback)",
+            "MarkItDown Only",
+            "Pypandoc Only",
+            "PyMuPDF Only (PDF)"
+        ])
+        self.converter_combo.setCurrentIndex(0)
+        self.converter_combo.setToolTip(
+            "Auto: Tries multiple converters for best results\n"
+            "MarkItDown: Microsoft's converter (primary)\n"
+            "Pypandoc: Universal converter (fallback)\n"
+            "PyMuPDF: Specialized PDF converter"
+        )
+        converter_layout.addWidget(self.converter_combo)
+        converter_layout.addStretch()
+        output_layout.addLayout(converter_layout)
+
         # Use source directory checkbox
         self.use_source_dir_checkbox = QCheckBox(
             "✓ Save converted files in the same directory as source files (Recommended)"
@@ -419,15 +442,19 @@ class MarkItDownGUI(QMainWindow):
         QMessageBox.about(
             self,
             "About MarkItDown GUI",
-            "MarkItDown GUI v2.1\n\n"
+            "MarkItDown GUI v3.0\n\n"
             "A PyQt6 GUI for converting various document formats to Markdown.\n\n"
             "Features:\n"
             "• 47 beautiful themes\n"
+            "• Multi-converter fallback system\n"
             "• Enhanced drag and drop support\n"
             "• Batch conversion\n"
             "• Multiple file format support\n"
             "• Smart output directory\n\n"
-            "Powered by Microsoft MarkItDown\n"
+            "Converters:\n"
+            "• MarkItDown (Microsoft)\n"
+            "• Pypandoc (Universal)\n"
+            "• PyMuPDF (PDF specialist)\n\n"
             "Theme system from Fiori_Search"
         )
 
@@ -604,11 +631,24 @@ class MarkItDownGUI(QMainWindow):
         self.log("🚀 Starting conversion...")
         self.log(f"📊 Files to convert: {len(self.files_to_convert)}")
 
+        # Get converter preference
+        converter_map = {
+            "Auto (Smart Fallback)": "auto",
+            "MarkItDown Only": "markitdown",
+            "Pypandoc Only": "pypandoc",
+            "PyMuPDF Only (PDF)": "pymupdf"
+        }
+        converter_pref = converter_map.get(
+            self.converter_combo.currentText(),
+            "auto"
+        )
+
         # Create and start worker thread
         self.worker = ConversionWorker(
             self.files_to_convert.copy(),
             output_dir,
-            use_source_dir
+            use_source_dir,
+            converter_pref
         )
         self.worker.progress.connect(self.update_progress)
         self.worker.log.connect(self.log)

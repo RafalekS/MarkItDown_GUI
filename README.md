@@ -8,15 +8,20 @@ A modern PyQt6 GUI application for converting various document formats to Markdo
 
 ## Features
 
-- **47 Beautiful Themes**: Choose from a wide variety of color schemes (from Fiori_Search)
-- **Multi-format Support**: Convert various file formats to Markdown
-- **Enhanced Drag & Drop**: Visual drag-and-drop zone with clear indicators
-- **Smart Output**: Save converted files in the same directory as source files (default)
-- **Batch Processing**: Convert multiple files at once
-- **Progress Tracking**: Real-time progress bar and detailed conversion log
-- **User-Friendly Interface**: Clean, modern GUI built with PyQt6
-- **Persistent Settings**: Your theme and preferences are saved automatically
-- **Cross-Platform**: Works on Windows, macOS, and Linux
+- **🎯 Multi-Converter Fallback System**: Automatically tries multiple converters for maximum success
+  - **MarkItDown** (Microsoft) - Primary converter
+  - **Pypandoc** (Universal) - Fallback for all formats
+  - **PyMuPDF** - Specialized PDF converter
+- **🎨 47 Beautiful Themes**: Choose from a wide variety of color schemes (from Fiori_Search)
+- **📦 Multi-format Support**: Convert PDF, DOCX, PPTX, XLSX, HTML, images, audio, and more
+- **🎪 Enhanced Drag & Drop**: Visual drag-and-drop zone with clear indicators
+- **💾 Smart Output**: Save converted files in the same directory as source files (default)
+- **⚡ Batch Processing**: Convert multiple files at once
+- **📊 Progress Tracking**: Real-time progress bar and detailed conversion log
+- **🎛️ Converter Selection**: Choose your preferred converter or use auto-fallback
+- **💻 User-Friendly Interface**: Clean, modern GUI built with PyQt6
+- **💿 Persistent Settings**: Your theme and preferences are saved automatically
+- **🌍 Cross-Platform**: Works on Windows, macOS, and Linux
 
 ## Supported File Formats
 
@@ -45,14 +50,19 @@ git clone https://github.com/RafalekS/MarkItDown_GUI.git
 cd MarkItDown_GUI
 ```
 
-2. Install required packages:
+2. **Install Pandoc** (required for fallback converter):
+   - **Windows**: Download from [pandoc.org](https://pandoc.org/installing.html) or use `winget install pandoc`
+   - **macOS**: `brew install pandoc`
+   - **Linux**: `sudo apt install pandoc` (Ubuntu/Debian) or `sudo yum install pandoc` (RHEL/CentOS)
+
+3. Install Python packages:
 ```bash
 pip install -r requirements.txt
 ```
 
 Or install manually:
 ```bash
-pip install 'markitdown[all]' PyQt6
+pip install PyQt6 'markitdown[all]' pypandoc pymupdf4llm
 ```
 
 ## Usage
@@ -78,21 +88,28 @@ chmod +x markitdown_gui.py
    - Select from 47 beautiful color schemes
    - Your choice is saved automatically
 
-2. **Add Files**:
+2. **Select Converter Strategy**:
+   - **Auto (Recommended)**: Automatically tries multiple converters for best results
+   - **MarkItDown Only**: Use only Microsoft's converter
+   - **Pypandoc Only**: Use only Pandoc
+   - **PyMuPDF Only**: Use only PyMuPDF (for PDFs)
+
+3. **Add Files**:
    - **Drag and Drop**: Simply drag files or folders into the drop zone
    - Click "Add Files" to select individual files
    - Click "Add Folder" to add all supported files from a directory
 
-3. **Configure Output**:
+4. **Configure Output**:
    - **Default (Recommended)**: Files are saved in the same directory as the source
    - **Custom Directory**: Uncheck the box and specify a custom output folder
 
-4. **Convert**:
+5. **Convert**:
    - Click "Convert to Markdown" to start the conversion process
-   - Monitor progress in the progress bar and log area
-   - Click "Stop" to cancel the conversion if needed
+   - Watch the log to see which converter succeeded
+   - Monitor progress in the progress bar
+   - Click "Stop" to cancel if needed
 
-5. **Manage Files**:
+6. **Manage Files**:
    - Select files in the list and click "Remove Selected" to remove them
    - Click "Clear All" to remove all files from the list
 
@@ -107,6 +124,33 @@ The application includes 47 themes from various categories:
 **Colorful Themes**: Spiderman, Jackie Brown, MonaLisa, Sakura, Ocean, Red Alert, Grass
 
 **And many more!** Try them all to find your favorite.
+
+## Multi-Converter System
+
+The application uses a smart fallback system to maximize conversion success:
+
+### How It Works
+
+1. **Auto Mode (Recommended)**:
+   - For PDFs: MarkItDown → PyMuPDF → Pypandoc
+   - For Office files: MarkItDown → Pypandoc
+   - For HTML: MarkItDown → Pypandoc
+   - Automatically selects the best strategy per file type
+
+2. **Manual Selection**:
+   - Choose a specific converter if you know what works best
+   - Useful for debugging or specific requirements
+
+3. **Fallback Logic**:
+   - If first converter fails or returns empty content
+   - Automatically tries the next available converter
+   - Shows which converter succeeded in the log
+
+### Which Converter to Use?
+
+- **MarkItDown**: Best for most files, especially Office documents and images
+- **Pypandoc**: Universal converter, great for HTML and text formats
+- **PyMuPDF**: Specialized for PDFs, especially scanned documents
 
 ## Advanced Usage
 
@@ -137,6 +181,7 @@ md = MarkItDown(llm_client=client, llm_model="gpt-4o")
 ```
 MarkItDown_GUI/
 ├── markitdown_gui.py    # Main application file
+├── converter.py         # Multi-converter fallback system
 ├── theme_manager.py     # Theme management system
 ├── themes/
 │   └── themes.json      # 47 color scheme definitions
@@ -151,20 +196,29 @@ MarkItDown_GUI/
 ### Architecture
 
 - **Main Window**: `MarkItDownGUI` class extends `QMainWindow`
+- **Multi-Converter**: `MultiConverter` class handles fallback strategy
 - **Worker Thread**: `ConversionWorker` class extends `QThread` for background processing
+- **Theme Manager**: `ThemeManager` class loads and applies themes
 - **Signals**: PyQt6 signals for thread-safe communication between worker and UI
 
 ### Key Components
 
 1. **File Selection**: Multiple ways to add files (dialog, folder, drag-and-drop)
-2. **Conversion Engine**: Uses MarkItDown library for actual conversion
+2. **Multi-Converter Engine**: Intelligent fallback system with 3 converters
 3. **Progress Tracking**: Real-time updates via Qt signals
-4. **Error Handling**: Graceful error handling with user feedback
+4. **Error Handling**: Graceful error handling with automatic fallback
+5. **Theme System**: 47 pre-defined color schemes with live switching
 
 ## Dependencies
 
-- **markitdown**: Microsoft's document-to-Markdown converter
+### Required
 - **PyQt6**: Modern Python binding for Qt6 GUI framework
+- **markitdown**: Microsoft's document-to-Markdown converter (primary)
+
+### Highly Recommended
+- **pypandoc**: Python wrapper for Pandoc (universal fallback)
+- **Pandoc**: Universal document converter (system package)
+- **pymupdf4llm**: Specialized PDF converter
 
 See `requirements.txt` for specific versions.
 
