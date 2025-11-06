@@ -1,0 +1,494 @@
+#!/usr/bin/env python3
+"""
+MarkItDown GUI - A PyQt6 GUI for converting various document formats to Markdown
+Supports: PDF, DOCX, PPTX, XLSX, XLS, HTML, TXT, CSV, JSON, XML, ZIP, JPG, PNG, WAV, MP3
+"""
+
+import sys
+import os
+from pathlib import Path
+from typing import List, Optional
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QListWidget, QLabel, QFileDialog, QTextEdit,
+    QLineEdit, QGroupBox, QProgressBar, QMessageBox, QListWidgetItem,
+    QCheckBox, QSpinBox
+)
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QIcon, QDragEnterEvent, QDropEvent
+from markitdown import MarkItDown
+
+
+class ConversionWorker(QThread):
+    """Worker thread for converting files to markdown"""
+
+    progress = pyqtSignal(int, int)  # current, total
+    log = pyqtSignal(str)
+    finished = pyqtSignal()
+    error = pyqtSignal(str, str)  # filename, error message
+
+    def __init__(self, files: List[str], output_dir: str, llm_client=None, llm_model: Optional[str] = None):
+        super().__init__()
+        self.files = files
+        self.output_dir = output_dir
+        self.llm_client = llm_client
+        self.llm_model = llm_model
+        self._is_running = True
+
+    def stop(self):
+        """Stop the conversion process"""
+        self._is_running = False
+
+    def run(self):
+        """Convert files in background thread"""
+        try:
+            # Initialize MarkItDown
+            if self.llm_client and self.llm_model:
+                md = MarkItDown(llm_client=self.llm_client, llm_model=self.llm_model)
+                self.log.emit("MarkItDown initialized with LLM support")
+            else:
+                md = MarkItDown()
+                self.log.emit("MarkItDown initialized")
+
+            total = len(self.files)
+
+            for idx, file_path in enumerate(self.files):
+                if not self._is_running:
+                    self.log.emit("Conversion stopped by user")
+                    break
+
+                try:
+                    file_name = os.path.basename(file_path)
+                    self.log.emit(f"Converting: {file_name}")
+
+                    # Convert file
+                    result = md.convert(file_path)
+
+                    # Generate output filename
+                    base_name = Path(file_path).stem
+                    output_path = os.path.join(self.output_dir, f"{base_name}.md")
+
+                    # Handle duplicate filenames
+                    counter = 1
+                    while os.path.exists(output_path):
+                        output_path = os.path.join(self.output_dir, f"{base_name}_{counter}.md")
+                        counter += 1
+
+                    # Save markdown
+                    with open(output_path, 'w', encoding='utf-8') as f:
+                        f.write(result.text_content)
+
+                    self.log.emit(f"✓ Saved: {os.path.basename(output_path)}")
+                    self.progress.emit(idx + 1, total)
+
+                except Exception as e:
+                    self.error.emit(file_name, str(e))
+                    self.log.emit(f"✗ Error converting {file_name}: {str(e)}")
+                    self.progress.emit(idx + 1, total)
+
+            if self._is_running:
+                self.log.emit("Conversion completed!")
+
+        except Exception as e:
+            self.log.emit(f"Fatal error: {str(e)}")
+        finally:
+            self.finished.emit()
+
+
+class MarkItDownGUI(QMainWindow):
+    """Main GUI window for MarkItDown converter"""
+
+    SUPPORTED_FORMATS = [
+        "PDF Files (*.pdf)",
+        "Word Documents (*.docx)",
+        "PowerPoint (*.pptx)",
+        "Excel (*.xlsx *.xls)",
+        "HTML Files (*.html *.htm)",
+        "Text Files (*.txt)",
+        "CSV Files (*.csv)",
+        "JSON Files (*.json)",
+        "XML Files (*.xml)",
+        "ZIP Archives (*.zip)",
+        "Images (*.jpg *.jpeg *.png)",
+        "Audio Files (*.wav *.mp3)",
+        "All Supported Files (*.pdf *.docx *.pptx *.xlsx *.xls *.html *.htm *.txt *.csv *.json *.xml *.zip *.jpg *.jpeg *.png *.wav *.mp3)"
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self.files_to_convert: List[str] = []
+        self.worker: Optional[ConversionWorker] = None
+        self.init_ui()
+
+    def init_ui(self):
+        """Initialize the user interface"""
+        self.setWindowTitle("MarkItDown GUI - Document to Markdown Converter")
+        self.setMinimumSize(800, 600)
+
+        # Central widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+
+        # Title
+        title_label = QLabel("MarkItDown - Convert Documents to Markdown")
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold; padding: 10px;")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title_label)
+
+        # File selection group
+        file_group = QGroupBox("Input Files")
+        file_layout = QVBoxLayout()
+
+        # File list
+        self.file_list = QListWidget()
+        self.file_list.setAcceptDrops(True)
+        self.file_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self.file_list.dragEnterEvent = self.drag_enter_event
+        self.file_list.dropEvent = self.drop_event
+        file_layout.addWidget(self.file_list)
+
+        # File buttons
+        file_btn_layout = QHBoxLayout()
+
+        add_files_btn = QPushButton("Add Files")
+        add_files_btn.clicked.connect(self.add_files)
+        file_btn_layout.addWidget(add_files_btn)
+
+        add_folder_btn = QPushButton("Add Folder")
+        add_folder_btn.clicked.connect(self.add_folder)
+        file_btn_layout.addWidget(add_folder_btn)
+
+        remove_btn = QPushButton("Remove Selected")
+        remove_btn.clicked.connect(self.remove_selected)
+        file_btn_layout.addWidget(remove_btn)
+
+        clear_btn = QPushButton("Clear All")
+        clear_btn.clicked.connect(self.clear_all)
+        file_btn_layout.addWidget(clear_btn)
+
+        file_layout.addLayout(file_btn_layout)
+        file_group.setLayout(file_layout)
+        main_layout.addWidget(file_group)
+
+        # Output directory group
+        output_group = QGroupBox("Output Settings")
+        output_layout = QVBoxLayout()
+
+        output_dir_layout = QHBoxLayout()
+        output_dir_layout.addWidget(QLabel("Output Directory:"))
+        self.output_dir_edit = QLineEdit()
+        self.output_dir_edit.setText(os.path.expanduser("~/Documents"))
+        output_dir_layout.addWidget(self.output_dir_edit)
+
+        browse_btn = QPushButton("Browse")
+        browse_btn.clicked.connect(self.browse_output_dir)
+        output_dir_layout.addWidget(browse_btn)
+
+        output_layout.addLayout(output_dir_layout)
+        output_group.setLayout(output_layout)
+        main_layout.addWidget(output_group)
+
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
+        main_layout.addWidget(self.progress_bar)
+
+        # Log area
+        log_group = QGroupBox("Conversion Log")
+        log_layout = QVBoxLayout()
+
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setMaximumHeight(150)
+        log_layout.addWidget(self.log_text)
+
+        log_btn_layout = QHBoxLayout()
+        clear_log_btn = QPushButton("Clear Log")
+        clear_log_btn.clicked.connect(self.log_text.clear)
+        log_btn_layout.addWidget(clear_log_btn)
+        log_btn_layout.addStretch()
+        log_layout.addLayout(log_btn_layout)
+
+        log_group.setLayout(log_layout)
+        main_layout.addWidget(log_group)
+
+        # Convert button
+        convert_btn_layout = QHBoxLayout()
+        convert_btn_layout.addStretch()
+
+        self.convert_btn = QPushButton("Convert to Markdown")
+        self.convert_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 10px 20px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.convert_btn.clicked.connect(self.start_conversion)
+        convert_btn_layout.addWidget(self.convert_btn)
+
+        self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 10px 20px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+        """)
+        self.stop_btn.clicked.connect(self.stop_conversion)
+        self.stop_btn.setVisible(False)
+        convert_btn_layout.addWidget(self.stop_btn)
+
+        convert_btn_layout.addStretch()
+        main_layout.addLayout(convert_btn_layout)
+
+        # Status bar
+        self.statusBar().showMessage("Ready")
+
+        # Info label
+        info_label = QLabel(
+            "Supported formats: PDF, DOCX, PPTX, XLSX, XLS, HTML, TXT, CSV, JSON, XML, ZIP, JPG, PNG, WAV, MP3"
+        )
+        info_label.setStyleSheet("color: gray; font-size: 10px; padding: 5px;")
+        info_label.setWordWrap(True)
+        main_layout.addWidget(info_label)
+
+    def drag_enter_event(self, event: QDragEnterEvent):
+        """Handle drag enter event"""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def drop_event(self, event: QDropEvent):
+        """Handle drop event"""
+        files = []
+        for url in event.mimeData().urls():
+            file_path = url.toLocalFile()
+            if os.path.isfile(file_path):
+                files.append(file_path)
+            elif os.path.isdir(file_path):
+                files.extend(self.get_supported_files_from_dir(file_path))
+
+        if files:
+            self.add_files_to_list(files)
+            self.log(f"Added {len(files)} file(s) via drag and drop")
+
+    def add_files(self):
+        """Open file dialog to add files"""
+        files, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Select Files to Convert",
+            "",
+            ";;".join(self.SUPPORTED_FORMATS)
+        )
+
+        if files:
+            self.add_files_to_list(files)
+            self.log(f"Added {len(files)} file(s)")
+
+    def add_folder(self):
+        """Open folder dialog to add all supported files from a folder"""
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select Folder",
+            ""
+        )
+
+        if folder:
+            files = self.get_supported_files_from_dir(folder)
+            if files:
+                self.add_files_to_list(files)
+                self.log(f"Added {len(files)} file(s) from folder")
+            else:
+                self.log("No supported files found in the selected folder")
+
+    def get_supported_files_from_dir(self, directory: str) -> List[str]:
+        """Get all supported files from a directory"""
+        supported_extensions = {
+            '.pdf', '.docx', '.pptx', '.xlsx', '.xls', '.html', '.htm',
+            '.txt', '.csv', '.json', '.xml', '.zip', '.jpg', '.jpeg',
+            '.png', '.wav', '.mp3'
+        }
+
+        files = []
+        for root, _, filenames in os.walk(directory):
+            for filename in filenames:
+                if Path(filename).suffix.lower() in supported_extensions:
+                    files.append(os.path.join(root, filename))
+
+        return files
+
+    def add_files_to_list(self, files: List[str]):
+        """Add files to the list widget"""
+        for file_path in files:
+            if file_path not in self.files_to_convert:
+                self.files_to_convert.append(file_path)
+                item = QListWidgetItem(file_path)
+                self.file_list.addItem(item)
+
+        self.statusBar().showMessage(f"Total files: {len(self.files_to_convert)}")
+
+    def remove_selected(self):
+        """Remove selected files from the list"""
+        selected_items = self.file_list.selectedItems()
+        if not selected_items:
+            return
+
+        for item in selected_items:
+            file_path = item.text()
+            if file_path in self.files_to_convert:
+                self.files_to_convert.remove(file_path)
+            self.file_list.takeItem(self.file_list.row(item))
+
+        self.log(f"Removed {len(selected_items)} file(s)")
+        self.statusBar().showMessage(f"Total files: {len(self.files_to_convert)}")
+
+    def clear_all(self):
+        """Clear all files from the list"""
+        self.files_to_convert.clear()
+        self.file_list.clear()
+        self.log("Cleared all files")
+        self.statusBar().showMessage("Ready")
+
+    def browse_output_dir(self):
+        """Browse for output directory"""
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            "Select Output Directory",
+            self.output_dir_edit.text()
+        )
+
+        if directory:
+            self.output_dir_edit.setText(directory)
+
+    def log(self, message: str):
+        """Add message to log"""
+        self.log_text.append(message)
+        self.log_text.verticalScrollBar().setValue(
+            self.log_text.verticalScrollBar().maximum()
+        )
+
+    def start_conversion(self):
+        """Start the conversion process"""
+        if not self.files_to_convert:
+            QMessageBox.warning(
+                self,
+                "No Files",
+                "Please add files to convert first."
+            )
+            return
+
+        output_dir = self.output_dir_edit.text()
+        if not output_dir:
+            QMessageBox.warning(
+                self,
+                "No Output Directory",
+                "Please specify an output directory."
+            )
+            return
+
+        # Create output directory if it doesn't exist
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to create output directory: {str(e)}"
+            )
+            return
+
+        # Disable UI elements
+        self.convert_btn.setVisible(False)
+        self.stop_btn.setVisible(True)
+        self.file_list.setEnabled(False)
+        self.statusBar().showMessage("Converting...")
+
+        # Clear log
+        self.log_text.clear()
+        self.log("Starting conversion...")
+
+        # Create and start worker thread
+        self.worker = ConversionWorker(
+            self.files_to_convert.copy(),
+            output_dir
+        )
+        self.worker.progress.connect(self.update_progress)
+        self.worker.log.connect(self.log)
+        self.worker.error.connect(self.handle_error)
+        self.worker.finished.connect(self.conversion_finished)
+        self.worker.start()
+
+    def stop_conversion(self):
+        """Stop the conversion process"""
+        if self.worker and self.worker.isRunning():
+            self.log("Stopping conversion...")
+            self.worker.stop()
+            self.worker.wait()
+
+    def update_progress(self, current: int, total: int):
+        """Update progress bar"""
+        progress = int((current / total) * 100)
+        self.progress_bar.setValue(progress)
+        self.statusBar().showMessage(f"Converting: {current}/{total} files")
+
+    def handle_error(self, filename: str, error_msg: str):
+        """Handle conversion error"""
+        # Log is already updated by the worker
+        pass
+
+    def conversion_finished(self):
+        """Handle conversion completion"""
+        # Re-enable UI elements
+        self.convert_btn.setVisible(True)
+        self.stop_btn.setVisible(False)
+        self.file_list.setEnabled(True)
+        self.statusBar().showMessage("Conversion complete")
+
+        # Show completion message
+        QMessageBox.information(
+            self,
+            "Conversion Complete",
+            f"Converted {len(self.files_to_convert)} file(s) to Markdown.\n"
+            f"Output directory: {self.output_dir_edit.text()}"
+        )
+
+        # Reset progress bar
+        self.progress_bar.setValue(0)
+
+        # Clear file list
+        self.clear_all()
+
+
+def main():
+    """Main application entry point"""
+    app = QApplication(sys.argv)
+
+    # Set application style
+    app.setStyle('Fusion')
+
+    # Create and show main window
+    window = MarkItDownGUI()
+    window.show()
+
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

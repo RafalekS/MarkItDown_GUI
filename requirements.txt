@@ -1,0 +1,7 @@
+# Core dependencies
+markitdown[all]>=0.1.0
+PyQt6>=6.6.0
+
+# Optional: For LLM integration (image descriptions, audio transcription)
+# Uncomment if you want to use OpenAI or other LLM providers
+# openai>=1.0.0
