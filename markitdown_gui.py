@@ -293,16 +293,20 @@ class MarkItDownGUI(QMainWindow):
             "Auto (Smart Fallback)",
             "MarkItDown Only",
             "Pypandoc Only",
+            "Marker Only (PDF - Best)",
             "PyMuPDF Only (PDF)",
-            "pdfplumber Only (PDF)"
+            "pdfplumber Only (PDF)",
+            "PyPDF Only (PDF - Simple)"
         ])
         self.converter_combo.setCurrentIndex(0)
         self.converter_combo.setToolTip(
             "Auto: Tries multiple converters for best results\n"
-            "MarkItDown: Microsoft's converter (primary)\n"
+            "MarkItDown: Microsoft's converter (fast, primary)\n"
             "Pypandoc: Universal converter (NOT for PDFs)\n"
-            "PyMuPDF: Specialized PDF converter\n"
-            "pdfplumber: PDF text & table extractor"
+            "Marker: Advanced PDF converter (best for complex PDFs)\n"
+            "PyMuPDF: Fast PDF converter\n"
+            "pdfplumber: PDF text & table extractor\n"
+            "PyPDF: Simple PDF text extractor (basic)"
         )
         converter_layout.addWidget(self.converter_combo)
         converter_layout.addStretch()
@@ -454,10 +458,12 @@ class MarkItDownGUI(QMainWindow):
             "• Multiple file format support\n"
             "• Smart output directory\n\n"
             "Converters:\n"
-            "• MarkItDown (Microsoft)\n"
-            "• Pypandoc (Universal, NOT PDFs)\n"
-            "• PyMuPDF (PDF specialist)\n"
-            "• pdfplumber (PDF text & tables)\n\n"
+            "• MarkItDown (Microsoft - Fast)\n"
+            "• Marker (Complex PDFs - Best)\n"
+            "• PyMuPDF (PDF - Fast)\n"
+            "• pdfplumber (PDF tables)\n"
+            "• PyPDF (PDF - Simple)\n"
+            "• Pypandoc (NOT for PDFs)\n\n"
             "Theme system from Fiori_Search"
         )
 
@@ -639,8 +645,10 @@ class MarkItDownGUI(QMainWindow):
             "Auto (Smart Fallback)": "auto",
             "MarkItDown Only": "markitdown",
             "Pypandoc Only": "pypandoc",
+            "Marker Only (PDF - Best)": "marker",
             "PyMuPDF Only (PDF)": "pymupdf",
-            "pdfplumber Only (PDF)": "pdfplumber"
+            "pdfplumber Only (PDF)": "pdfplumber",
+            "PyPDF Only (PDF - Simple)": "pypdf"
         }
         converter_pref = converter_map.get(
             self.converter_combo.currentText(),

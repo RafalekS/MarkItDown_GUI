@@ -9,10 +9,12 @@ A modern PyQt6 GUI application for converting various document formats to Markdo
 ## Features
 
 - **🎯 Multi-Converter Fallback System**: Automatically tries multiple converters for maximum success
-  - **MarkItDown** (Microsoft) - Primary converter
-  - **Pypandoc** (Universal) - Fallback for non-PDF formats
-  - **PyMuPDF** - Specialized PDF converter #1
-  - **pdfplumber** - Specialized PDF converter #2 (with table support)
+  - **MarkItDown** (Microsoft) - Primary converter (fast)
+  - **Marker** - Advanced PDF converter (best for complex PDFs)
+  - **PyMuPDF** - Fast PDF converter
+  - **pdfplumber** - PDF with table support
+  - **PyPDF** - Simple PDF text extraction
+  - **Pypandoc** (Universal) - For non-PDF formats only
 - **🎨 47 Beautiful Themes**: Choose from a wide variety of color schemes (from Fiori_Search)
 - **📦 Multi-format Support**: Convert PDF, DOCX, PPTX, XLSX, HTML, images, audio, and more
 - **🎪 Enhanced Drag & Drop**: Visual drag-and-drop zone with clear indicators
@@ -63,8 +65,10 @@ pip install -r requirements.txt
 
 Or install manually:
 ```bash
-pip install PyQt6 'markitdown[all]' pypandoc pymupdf4llm pdfplumber
+pip install PyQt6 'markitdown[all]' pypandoc pymupdf4llm pdfplumber marker-pdf pypdf
 ```
+
+**Note**: marker-pdf will download AI models (~500MB) on first use for better PDF accuracy.
 
 ## Usage
 
@@ -90,11 +94,13 @@ chmod +x markitdown_gui.py
    - Your choice is saved automatically
 
 2. **Select Converter Strategy**:
-   - **Auto (Recommended)**: Automatically tries multiple converters for best results
-   - **MarkItDown Only**: Use only Microsoft's converter
-   - **Pypandoc Only**: Use only Pandoc (NOT for PDFs)
-   - **PyMuPDF Only**: Use only PyMuPDF (for PDFs)
-   - **pdfplumber Only**: Use only pdfplumber (for PDFs with tables)
+   - **Auto (Recommended)**: Automatically tries up to 5 PDF converters for best results
+   - **MarkItDown Only**: Use only Microsoft's converter (fast)
+   - **Marker Only**: Use advanced PDF converter (best for complex PDFs)
+   - **PyMuPDF Only**: Fast PDF converter
+   - **pdfplumber Only**: PDF with table support
+   - **PyPDF Only**: Simple PDF text extraction
+   - **Pypandoc Only**: For non-PDFs only
 
 3. **Add Files**:
    - **Drag and Drop**: Simply drag files or folders into the drop zone
@@ -134,11 +140,12 @@ The application uses a smart fallback system to maximize conversion success:
 ### How It Works
 
 1. **Auto Mode (Recommended)**:
-   - For PDFs: MarkItDown → PyMuPDF → pdfplumber
+   - For PDFs: MarkItDown → Marker → PyMuPDF → pdfplumber → PyPDF
    - For Office files: MarkItDown → Pypandoc
    - For HTML: MarkItDown → Pypandoc
    - Automatically selects the best strategy per file type
    - **Note**: Pypandoc does NOT support PDF input
+   - **5 PDF converters** ensure maximum success rate!
 
 2. **Manual Selection**:
    - Choose a specific converter if you know what works best
@@ -151,10 +158,12 @@ The application uses a smart fallback system to maximize conversion success:
 
 ### Which Converter to Use?
 
-- **MarkItDown**: Best for most files, especially Office documents and images
+- **MarkItDown**: Best for most files, fast and reliable for Office documents and images
+- **Marker**: Best for complex PDFs with tables, formulas, scientific papers (slower but most accurate)
+- **PyMuPDF**: Fast PDF converter, good for general PDFs
+- **pdfplumber**: Good for PDFs with tables and structured content
+- **PyPDF**: Simple PDF text extraction (basic fallback)
 - **Pypandoc**: Universal converter for DOCX, HTML, and text formats (NOT for PDFs!)
-- **PyMuPDF**: Specialized for PDFs, handles most PDF types
-- **pdfplumber**: Excellent for PDFs with tables and structured content
 
 ## Advanced Usage
 
@@ -219,11 +228,13 @@ MarkItDown_GUI/
 - **PyQt6**: Modern Python binding for Qt6 GUI framework
 - **markitdown**: Microsoft's document-to-Markdown converter (primary)
 
-### Highly Recommended
+### Highly Recommended (for maximum PDF success)
+- **marker-pdf**: Advanced PDF converter with AI models (best for complex PDFs)
 - **pypandoc**: Python wrapper for Pandoc (universal fallback for non-PDFs)
 - **Pandoc**: Universal document converter (system package)
-- **pymupdf4llm**: Specialized PDF converter
+- **pymupdf4llm**: Fast PDF converter
 - **pdfplumber**: PDF text and table extractor
+- **pypdf**: Simple PDF text extraction
 
 See `requirements.txt` for specific versions.
 

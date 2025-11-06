@@ -61,6 +61,20 @@ class MultiConverter:
         except ImportError:
             pass
 
+        # Check marker for advanced PDF conversion
+        try:
+            import marker
+            self.available_converters.append('marker')
+        except ImportError:
+            pass
+
+        # Check PyPDF2 for basic PDF text extraction
+        try:
+            import pypdf
+            self.available_converters.append('pypdf')
+        except ImportError:
+            pass
+
     def convert_with_markitdown(self, file_path: str) -> ConversionResult:
         """
         Convert using Microsoft MarkItDown.
@@ -223,6 +237,105 @@ class MultiConverter:
                 error_message=str(e)
             )
 
+    def convert_with_marker(self, file_path: str) -> ConversionResult:
+        """
+        Convert PDF using Marker (datalab-to).
+        Best for: Complex PDFs, scientific papers, documents with tables and formulas
+        """
+        try:
+            from marker.convert import convert_single_pdf
+            from marker.models import load_all_models
+
+            # Only works with PDFs
+            ext = Path(file_path).suffix.lower()
+            if ext != '.pdf':
+                return ConversionResult(
+                    success=False,
+                    content='',
+                    converter_used='marker',
+                    error_message='Marker only handles PDF files'
+                )
+
+            # Load models (this may take time on first run)
+            model_lst = load_all_models()
+
+            # Convert PDF to markdown
+            full_text, images, out_meta = convert_single_pdf(file_path, model_lst)
+
+            if full_text and len(full_text.strip()) > 0:
+                return ConversionResult(
+                    success=True,
+                    content=full_text,
+                    converter_used='marker'
+                )
+            else:
+                return ConversionResult(
+                    success=False,
+                    content='',
+                    converter_used='marker',
+                    error_message='No text extracted from PDF'
+                )
+
+        except Exception as e:
+            return ConversionResult(
+                success=False,
+                content='',
+                converter_used='marker',
+                error_message=str(e)
+            )
+
+    def convert_with_pypdf(self, file_path: str) -> ConversionResult:
+        """
+        Convert PDF using PyPDF2 (pypdf).
+        Best for: Simple PDFs with plain text (basic fallback)
+        """
+        try:
+            from pypdf import PdfReader
+
+            # Only works with PDFs
+            ext = Path(file_path).suffix.lower()
+            if ext != '.pdf':
+                return ConversionResult(
+                    success=False,
+                    content='',
+                    converter_used='pypdf',
+                    error_message='PyPDF only handles PDF files'
+                )
+
+            # Extract text from PDF
+            reader = PdfReader(file_path)
+            text_content = []
+
+            for page_num, page in enumerate(reader.pages, 1):
+                text_content.append(f"\n## Page {page_num}\n")
+                page_text = page.extract_text()
+                if page_text:
+                    text_content.append(page_text)
+
+            md_text = "\n".join(text_content)
+
+            if md_text and len(md_text.strip()) > 0:
+                return ConversionResult(
+                    success=True,
+                    content=md_text,
+                    converter_used='pypdf'
+                )
+            else:
+                return ConversionResult(
+                    success=False,
+                    content='',
+                    converter_used='pypdf',
+                    error_message='No text extracted from PDF'
+                )
+
+        except Exception as e:
+            return ConversionResult(
+                success=False,
+                content='',
+                converter_used='pypdf',
+                error_message=str(e)
+            )
+
     def convert_with_pymupdf(self, file_path: str) -> ConversionResult:
         """
         Convert PDF using PyMuPDF4LLM.
@@ -295,9 +408,10 @@ class MultiConverter:
         else:
             # Auto mode: define optimal strategy per file type
             if ext == '.pdf':
-                # For PDFs: try MarkItDown first, then specialized PDF tools
+                # For PDFs: try multiple specialized converters
                 # Note: pypandoc does NOT support PDF input
-                strategies = ['markitdown', 'pymupdf', 'pdfplumber']
+                # Order: MarkItDown (fast) → marker (accurate) → PyMuPDF → pdfplumber → pypdf (simple)
+                strategies = ['markitdown', 'marker', 'pymupdf', 'pdfplumber', 'pypdf']
             elif ext in ['.docx', '.pptx', '.xlsx']:
                 # For Office: MarkItDown is best, then Pypandoc
                 strategies = ['markitdown', 'pypandoc']
@@ -329,6 +443,10 @@ class MultiConverter:
                 result = self.convert_with_pymupdf(file_path)
             elif converter_name == 'pdfplumber':
                 result = self.convert_with_pdfplumber(file_path)
+            elif converter_name == 'marker':
+                result = self.convert_with_marker(file_path)
+            elif converter_name == 'pypdf':
+                result = self.convert_with_pypdf(file_path)
             else:
                 continue
 

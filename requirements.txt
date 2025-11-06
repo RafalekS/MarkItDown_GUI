@@ -8,9 +8,11 @@ markitdown[all]>=0.1.0
 # Install pandoc system package first: https://pandoc.org/installing.html
 pypandoc>=1.13
 
-# Specialized PDF converters (optional but recommended for PDFs)
+# Specialized PDF converters (optional but highly recommended for PDFs)
 pymupdf4llm>=0.0.5
 pdfplumber>=0.11.0
+marker-pdf>=0.2.0
+pypdf>=4.0.0
 
 # Optional: For LLM integration (image descriptions, audio transcription)
 # Uncomment if you want to use OpenAI or other LLM providers
