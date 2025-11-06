@@ -37,10 +37,7 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Test files
-test_files/
-*.md
-!README.md
+
 
 # Logs
 *.log
