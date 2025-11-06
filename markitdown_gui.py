@@ -13,7 +13,8 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QListWidget, QLabel, QFileDialog, QTextEdit,
     QLineEdit, QGroupBox, QProgressBar, QMessageBox, QListWidgetItem,
-    QComboBox, QCheckBox, QDialog, QTabWidget, QSpinBox, QFormLayout
+    QComboBox, QCheckBox, QDialog, QTabWidget, QSpinBox, QFormLayout,
+    QDoubleSpinBox, QScrollArea
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QAction
@@ -170,14 +171,13 @@ class DragDropListWidget(QListWidget):
             event.ignore()
 
 
-class SettingsDialog(QDialog):
-    """Settings dialog for converter-specific configuration"""
+    """Comprehensive settings dialog for all converter configurations"""
 
     def __init__(self, config: Dict, parent=None):
         super().__init__(parent)
         self.config = config
-        self.setWindowTitle("Converter Settings")
-        self.setMinimumSize(600, 500)
+        self.setWindowTitle("Converter Settings - Comprehensive Configuration")
+        self.setMinimumSize(750, 650)
         self.init_ui()
 
     def init_ui(self):
@@ -186,137 +186,24 @@ class SettingsDialog(QDialog):
 
         # Create tab widget
         tabs = QTabWidget()
+        tabs.setTabPosition(QTabWidget.TabPosition.West)  # Tabs on left side for better navigation
 
-        # OCR Settings Tab
-        ocr_tab = QWidget()
-        ocr_layout = QFormLayout(ocr_tab)
-
-        # OCR DPI
-        self.ocr_dpi_spin = QSpinBox()
-        self.ocr_dpi_spin.setRange(72, 600)
-        self.ocr_dpi_spin.setValue(self.config.get("ocr_dpi", 300))
-        self.ocr_dpi_spin.setSuffix(" DPI")
-        self.ocr_dpi_spin.setToolTip("Higher DPI = better quality but slower (recommended: 300)")
-        ocr_layout.addRow("Image DPI:", self.ocr_dpi_spin)
-
-        # OCR Language
-        self.ocr_lang_edit = QLineEdit()
-        self.ocr_lang_edit.setText(self.config.get("ocr_language", "eng"))
-        self.ocr_lang_edit.setToolTip("Language code (e.g., 'eng' for English, 'fra' for French, 'eng+fra' for both)")
-        ocr_layout.addRow("Language:", self.ocr_lang_edit)
-
-        # OCR PSM Mode
-        self.ocr_psm_combo = QComboBox()
-        psm_modes = [
-            "0 - Orientation and script detection (OSD) only",
-            "1 - Automatic page segmentation with OSD",
-            "2 - Automatic page segmentation (no OSD)",
-            "3 - Fully automatic page segmentation (default)",
-            "4 - Single column of text",
-            "5 - Single uniform block of vertically aligned text",
-            "6 - Single uniform block of text",
-            "7 - Treat the image as a single text line",
-            "8 - Treat the image as a single word",
-            "9 - Treat the image as a single word in a circle",
-            "10 - Treat the image as a single character",
-            "11 - Sparse text. Find as much text as possible",
-            "12 - Sparse text with OSD",
-            "13 - Raw line. Treat the image as a single text line"
-        ]
-        self.ocr_psm_combo.addItems(psm_modes)
-        self.ocr_psm_combo.setCurrentIndex(self.config.get("ocr_psm", 3))
-        self.ocr_psm_combo.setToolTip("Page Segmentation Mode - controls how Tesseract analyzes the page")
-        ocr_layout.addRow("PSM Mode:", self.ocr_psm_combo)
-
-        # OCR Engine Mode
-        self.ocr_oem_combo = QComboBox()
-        oem_modes = [
-            "0 - Legacy engine only",
-            "1 - Neural nets LSTM engine only",
-            "2 - Legacy + LSTM engines",
-            "3 - Default (based on what is available)"
-        ]
-        self.ocr_oem_combo.addItems(oem_modes)
-        self.ocr_oem_combo.setCurrentIndex(self.config.get("ocr_oem", 3))
-        self.ocr_oem_combo.setToolTip("OCR Engine Mode - LSTM is more accurate but slower")
-        ocr_layout.addRow("Engine Mode:", self.ocr_oem_combo)
-
-        tabs.addTab(ocr_tab, "🔍 OCR Settings")
-
-        # Pypandoc Settings Tab
-        pypandoc_tab = QWidget()
-        pypandoc_layout = QFormLayout(pypandoc_tab)
-
-        self.pypandoc_wrap_check = QCheckBox()
-        self.pypandoc_wrap_check.setChecked(not self.config.get("pypandoc_wrap", True))
-        self.pypandoc_wrap_check.setToolTip("Disable line wrapping in output")
-        pypandoc_layout.addRow("No wrap:", self.pypandoc_wrap_check)
-
-        self.pypandoc_extra_args = QLineEdit()
-        self.pypandoc_extra_args.setText(self.config.get("pypandoc_extra_args", ""))
-        self.pypandoc_extra_args.setPlaceholderText("e.g., --extract-media=./media")
-        self.pypandoc_extra_args.setToolTip("Additional pandoc command-line arguments (space-separated)")
-        pypandoc_layout.addRow("Extra arguments:", self.pypandoc_extra_args)
-
-        tabs.addTab(pypandoc_tab, "📄 Pypandoc")
-
-        # pdfplumber Settings Tab
-        pdfplumber_tab = QWidget()
-        pdfplumber_layout = QFormLayout(pdfplumber_tab)
-
-        self.pdfplumber_layout_check = QCheckBox()
-        self.pdfplumber_layout_check.setChecked(self.config.get("pdfplumber_layout", True))
-        self.pdfplumber_layout_check.setToolTip("Preserve layout when extracting text")
-        pdfplumber_layout.addRow("Preserve layout:", self.pdfplumber_layout_check)
-
-        tabs.addTab(pdfplumber_tab, "📊 pdfplumber")
-
-        # Marker Settings Tab
-        marker_tab = QWidget()
-        marker_layout = QFormLayout(marker_tab)
-
-        self.marker_max_pages = QSpinBox()
-        self.marker_max_pages.setRange(0, 10000)
-        self.marker_max_pages.setValue(self.config.get("marker_max_pages", 0))
-        self.marker_max_pages.setSpecialValueText("Unlimited")
-        self.marker_max_pages.setToolTip("Maximum pages to process (0 = unlimited)")
-        marker_layout.addRow("Max pages:", self.marker_max_pages)
-
-        self.marker_languages = QLineEdit()
-        self.marker_languages.setText(self.config.get("marker_languages", ""))
-        self.marker_languages.setPlaceholderText("e.g., English")
-        self.marker_languages.setToolTip("Expected languages in the PDF (comma-separated)")
-        marker_layout.addRow("Languages:", self.marker_languages)
-
-        tabs.addTab(marker_tab, "🤖 Marker")
-
-        # General Settings Tab
-        general_tab = QWidget()
-        general_layout = QFormLayout(general_tab)
-
-        self.output_encoding = QComboBox()
-        self.output_encoding.addItems(["utf-8", "utf-16", "ascii", "iso-8859-1"])
-        current_encoding = self.config.get("output_encoding", "utf-8")
-        index = self.output_encoding.findText(current_encoding)
-        if index >= 0:
-            self.output_encoding.setCurrentIndex(index)
-        general_layout.addRow("Output encoding:", self.output_encoding)
-
-        self.log_level = QComboBox()
-        self.log_level.addItems(["Minimal", "Normal", "Verbose"])
-        log_index = self.config.get("log_level", 1)
-        self.log_level.setCurrentIndex(log_index)
-        self.log_level.setToolTip("Amount of information shown in conversion log")
-        general_layout.addRow("Log verbosity:", self.log_level)
-
-        tabs.addTab(general_tab, "⚙️ General")
+        # Add all tabs
+        tabs.addTab(self.create_markitdown_tab(), "📝 MarkItDown")
+        tabs.addTab(self.create_ocr_tab(), "🔍 OCR/Tesseract")
+        tabs.addTab(self.create_pymupdf_tab(), "📄 PyMuPDF")
+        tabs.addTab(self.create_pdfplumber_tab(), "📊 pdfplumber")
+        tabs.addTab(self.create_pypdf_tab(), "📑 PyPDF")
+        tabs.addTab(self.create_marker_tab(), "🤖 Marker")
+        tabs.addTab(self.create_pypandoc_tab(), "🔄 Pypandoc")
+        tabs.addTab(self.create_general_tab(), "⚙️ General")
 
         layout.addWidget(tabs)
 
         # Buttons
         button_layout = QHBoxLayout()
 
-        reset_btn = QPushButton("Reset to Defaults")
+        reset_btn = QPushButton("Reset All to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
         button_layout.addWidget(reset_btn)
 
@@ -326,44 +213,628 @@ class SettingsDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("Save")
+        save_btn = QPushButton("Save Settings")
         save_btn.clicked.connect(self.accept)
         save_btn.setDefault(True)
         button_layout.addWidget(save_btn)
 
         layout.addLayout(button_layout)
 
+    def create_markitdown_tab(self) -> QWidget:
+        """Create MarkItDown settings tab"""
+        tab = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        layout = QFormLayout(content)
+
+        # LLM Integration Group
+        llm_group = QGroupBox("LLM Integration (for Image Descriptions)")
+        llm_layout = QFormLayout()
+
+        self.md_llm_enable = QCheckBox()
+        self.md_llm_enable.setChecked(self.config.get("md_llm_enable", False))
+        self.md_llm_enable.setToolTip("Enable LLM for automatic image description generation")
+        llm_layout.addRow("Enable LLM:", self.md_llm_enable)
+
+        self.md_llm_provider = QComboBox()
+        self.md_llm_provider.addItems(["OpenAI", "Azure OpenAI", "Anthropic Claude", "Local (Ollama)"])
+        self.md_llm_provider.setCurrentIndex(self.config.get("md_llm_provider", 0))
+        llm_layout.addRow("Provider:", self.md_llm_provider)
+
+        self.md_llm_model = QLineEdit()
+        self.md_llm_model.setText(self.config.get("md_llm_model", "gpt-4o"))
+        self.md_llm_model.setPlaceholderText("e.g., gpt-4o, claude-3-opus-20240229, llama3")
+        llm_layout.addRow("Model:", self.md_llm_model)
+
+        self.md_llm_api_key = QLineEdit()
+        self.md_llm_api_key.setText(self.config.get("md_llm_api_key", ""))
+        self.md_llm_api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.md_llm_api_key.setPlaceholderText("Your API key (stored in config.json)")
+        llm_layout.addRow("API Key:", self.md_llm_api_key)
+
+        self.md_llm_base_url = QLineEdit()
+        self.md_llm_base_url.setText(self.config.get("md_llm_base_url", ""))
+        self.md_llm_base_url.setPlaceholderText("Optional: http://localhost:11434/v1 for Ollama")
+        llm_layout.addRow("Base URL:", self.md_llm_base_url)
+
+        llm_group.setLayout(llm_layout)
+        layout.addRow(llm_group)
+
+        # Image Settings
+        self.md_extract_images = QCheckBox()
+        self.md_extract_images.setChecked(self.config.get("md_extract_images", False))
+        self.md_extract_images.setToolTip("Extract and reference images in markdown")
+        layout.addRow("Extract images:", self.md_extract_images)
+
+        self.md_image_dir = QLineEdit()
+        self.md_image_dir.setText(self.config.get("md_image_dir", "./images"))
+        self.md_image_dir.setPlaceholderText("./images")
+        self.md_image_dir.setToolTip("Directory to save extracted images")
+        layout.addRow("Image directory:", self.md_image_dir)
+
+        scroll.setWidget(content)
+        tab_layout = QVBoxLayout(tab)
+        tab_layout.addWidget(scroll)
+        return tab
+
+    def create_ocr_tab(self) -> QWidget:
+        """Create OCR/Tesseract settings tab"""
+        tab = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        layout = QFormLayout(content)
+
+        # Basic OCR Settings
+        self.ocr_dpi = QSpinBox()
+        self.ocr_dpi.setRange(72, 600)
+        self.ocr_dpi.setValue(self.config.get("ocr_dpi", 300))
+        self.ocr_dpi.setSuffix(" DPI")
+        self.ocr_dpi.setToolTip("Higher DPI = better quality but slower (recommended: 300)")
+        layout.addRow("Image DPI:", self.ocr_dpi)
+
+        self.ocr_language = QLineEdit()
+        self.ocr_language.setText(self.config.get("ocr_language", "eng"))
+        self.ocr_language.setToolTip("Language code: eng, fra, deu, spa, chi_sim, jpn, etc. Use + for multiple (eng+fra)")
+        layout.addRow("Language(s):", self.ocr_language)
+
+        # PSM Mode
+        self.ocr_psm = QComboBox()
+        psm_modes = [
+            "0 - OSD only",
+            "1 - Auto + OSD",
+            "2 - Auto (no OSD)",
+            "3 - Fully auto (default)",
+            "4 - Single column",
+            "5 - Vertical block",
+            "6 - Uniform block",
+            "7 - Single line",
+            "8 - Single word",
+            "9 - Word in circle",
+            "10 - Single character",
+            "11 - Sparse text",
+            "12 - Sparse + OSD",
+            "13 - Raw line"
+        ]
+        self.ocr_psm.addItems(psm_modes)
+        self.ocr_psm.setCurrentIndex(self.config.get("ocr_psm", 3))
+        self.ocr_psm.setToolTip("Page Segmentation Mode - how Tesseract analyzes layout")
+        layout.addRow("PSM Mode:", self.ocr_psm)
+
+        # OEM Mode
+        self.ocr_oem = QComboBox()
+        oem_modes = [
+            "0 - Legacy only",
+            "1 - LSTM only",
+            "2 - Legacy + LSTM",
+            "3 - Default"
+        ]
+        self.ocr_oem.addItems(oem_modes)
+        self.ocr_oem.setCurrentIndex(self.config.get("ocr_oem", 3))
+        self.ocr_oem.setToolTip("OCR Engine: LSTM is more accurate but slower")
+        layout.addRow("Engine Mode:", self.ocr_oem)
+
+        # Preprocessing
+        preprocessing_group = QGroupBox("Preprocessing")
+        prep_layout = QFormLayout()
+
+        self.ocr_denoise = QCheckBox()
+        self.ocr_denoise.setChecked(self.config.get("ocr_denoise", False))
+        self.ocr_denoise.setToolTip("Remove noise from images before OCR")
+        prep_layout.addRow("Denoise:", self.ocr_denoise)
+
+        self.ocr_deskew = QCheckBox()
+        self.ocr_deskew.setChecked(self.config.get("ocr_deskew", False))
+        self.ocr_deskew.setToolTip("Automatically rotate skewed images")
+        prep_layout.addRow("Deskew:", self.ocr_deskew)
+
+        self.ocr_sharpen = QCheckBox()
+        self.ocr_sharpen.setChecked(self.config.get("ocr_sharpen", False))
+        self.ocr_sharpen.setToolTip("Sharpen images for better text recognition")
+        prep_layout.addRow("Sharpen:", self.ocr_sharpen)
+
+        self.ocr_threshold = QCheckBox()
+        self.ocr_threshold.setChecked(self.config.get("ocr_threshold", False))
+        self.ocr_threshold.setToolTip("Convert to black & white for better contrast")
+        prep_layout.addRow("Threshold:", self.ocr_threshold)
+
+        preprocessing_group.setLayout(prep_layout)
+        layout.addRow(preprocessing_group)
+
+        # Advanced
+        self.ocr_whitelist = QLineEdit()
+        self.ocr_whitelist.setText(self.config.get("ocr_whitelist", ""))
+        self.ocr_whitelist.setPlaceholderText("e.g., 0123456789 for numbers only")
+        self.ocr_whitelist.setToolTip("Only recognize these characters")
+        layout.addRow("Whitelist chars:", self.ocr_whitelist)
+
+        self.ocr_blacklist = QLineEdit()
+        self.ocr_blacklist.setText(self.config.get("ocr_blacklist", ""))
+        self.ocr_blacklist.setPlaceholderText("e.g., @#$% to ignore symbols")
+        self.ocr_blacklist.setToolTip("Ignore these characters")
+        layout.addRow("Blacklist chars:", self.ocr_blacklist)
+
+        scroll.setWidget(content)
+        tab_layout = QVBoxLayout(tab)
+        tab_layout.addWidget(scroll)
+        return tab
+
+    def create_pymupdf_tab(self) -> QWidget:
+        """Create PyMuPDF settings tab"""
+        tab = QWidget()
+        layout = QFormLayout(tab)
+
+        # Page range
+        self.pymupdf_pages = QLineEdit()
+        self.pymupdf_pages.setText(self.config.get("pymupdf_pages", ""))
+        self.pymupdf_pages.setPlaceholderText("e.g., 1-5, 10, 15-20 (empty = all)")
+        self.pymupdf_pages.setToolTip("Specify page ranges to convert")
+        layout.addRow("Page range:", self.pymupdf_pages)
+
+        # Extract images
+        self.pymupdf_images = QCheckBox()
+        self.pymupdf_images.setChecked(self.config.get("pymupdf_images", True))
+        self.pymupdf_images.setToolTip("Extract and save images from PDF")
+        layout.addRow("Extract images:", self.pymupdf_images)
+
+        # Table detection
+        self.pymupdf_tables = QCheckBox()
+        self.pymupdf_tables.setChecked(self.config.get("pymupdf_tables", True))
+        self.pymupdf_tables.setToolTip("Detect and convert tables to markdown")
+        layout.addRow("Detect tables:", self.pymupdf_tables)
+
+        # Page numbers
+        self.pymupdf_page_numbers = QCheckBox()
+        self.pymupdf_page_numbers.setChecked(self.config.get("pymupdf_page_numbers", True))
+        self.pymupdf_page_numbers.setToolTip("Include page number headers")
+        layout.addRow("Page numbers:", self.pymupdf_page_numbers)
+
+        # Margins
+        margins_group = QGroupBox("Margin Settings (inches)")
+        margins_layout = QFormLayout()
+
+        self.pymupdf_margin_left = QDoubleSpinBox()
+        self.pymupdf_margin_left.setRange(0, 5)
+        self.pymupdf_margin_left.setValue(self.config.get("pymupdf_margin_left", 0.5))
+        self.pymupdf_margin_left.setSingleStep(0.1)
+        margins_layout.addRow("Left:", self.pymupdf_margin_left)
+
+        self.pymupdf_margin_right = QDoubleSpinBox()
+        self.pymupdf_margin_right.setRange(0, 5)
+        self.pymupdf_margin_right.setValue(self.config.get("pymupdf_margin_right", 0.5))
+        self.pymupdf_margin_right.setSingleStep(0.1)
+        margins_layout.addRow("Right:", self.pymupdf_margin_right)
+
+        self.pymupdf_margin_top = QDoubleSpinBox()
+        self.pymupdf_margin_top.setRange(0, 5)
+        self.pymupdf_margin_top.setValue(self.config.get("pymupdf_margin_top", 0.5))
+        self.pymupdf_margin_top.setSingleStep(0.1)
+        margins_layout.addRow("Top:", self.pymupdf_margin_top)
+
+        self.pymupdf_margin_bottom = QDoubleSpinBox()
+        self.pymupdf_margin_bottom.setRange(0, 5)
+        self.pymupdf_margin_bottom.setValue(self.config.get("pymupdf_margin_bottom", 0.5))
+        self.pymupdf_margin_bottom.setSingleStep(0.1)
+        margins_layout.addRow("Bottom:", self.pymupdf_margin_bottom)
+
+        margins_group.setLayout(margins_layout)
+        layout.addRow(margins_group)
+
+        return tab
+
+    def create_pdfplumber_tab(self) -> QWidget:
+        """Create pdfplumber settings tab"""
+        tab = QWidget()
+        layout = QFormLayout(tab)
+
+        # Layout
+        self.pdfp_layout = QCheckBox()
+        self.pdfp_layout.setChecked(self.config.get("pdfplumber_layout", True))
+        self.pdfp_layout.setToolTip("Preserve spatial layout of text")
+        layout.addRow("Preserve layout:", self.pdfp_layout)
+
+        # Table detection strategy
+        self.pdfp_table_strategy = QComboBox()
+        self.pdfp_table_strategy.addItems(["lines", "lines_strict", "text", "explicit"])
+        strategy_index = ["lines", "lines_strict", "text", "explicit"].index(
+            self.config.get("pdfplumber_table_strategy", "lines")
+        )
+        self.pdfp_table_strategy.setCurrentIndex(strategy_index)
+        self.pdfp_table_strategy.setToolTip("How to detect table boundaries")
+        layout.addRow("Table strategy:", self.pdfp_table_strategy)
+
+        # Tolerance settings
+        tolerance_group = QGroupBox("Tolerance Settings")
+        tol_layout = QFormLayout()
+
+        self.pdfp_x_tolerance = QSpinBox()
+        self.pdfp_x_tolerance.setRange(0, 50)
+        self.pdfp_x_tolerance.setValue(self.config.get("pdfplumber_x_tolerance", 3))
+        self.pdfp_x_tolerance.setToolTip("Horizontal tolerance for grouping characters")
+        tol_layout.addRow("X tolerance:", self.pdfp_x_tolerance)
+
+        self.pdfp_y_tolerance = QSpinBox()
+        self.pdfp_y_tolerance.setRange(0, 50)
+        self.pdfp_y_tolerance.setValue(self.config.get("pdfplumber_y_tolerance", 3))
+        self.pdfp_y_tolerance.setToolTip("Vertical tolerance for grouping characters")
+        tol_layout.addRow("Y tolerance:", self.pdfp_y_tolerance)
+
+        tolerance_group.setLayout(tol_layout)
+        layout.addRow(tolerance_group)
+
+        # Page range
+        self.pdfp_pages = QLineEdit()
+        self.pdfp_pages.setText(self.config.get("pdfplumber_pages", ""))
+        self.pdfp_pages.setPlaceholderText("e.g., 1-5, 10 (empty = all)")
+        layout.addRow("Page range:", self.pdfp_pages)
+
+        return tab
+
+    def create_pypdf_tab(self) -> QWidget:
+        """Create PyPDF settings tab"""
+        tab = QWidget()
+        layout = QFormLayout(tab)
+
+        # Password
+        self.pypdf_password = QLineEdit()
+        self.pypdf_password.setText(self.config.get("pypdf_password", ""))
+        self.pypdf_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pypdf_password.setPlaceholderText("For encrypted PDFs")
+        self.pypdf_password.setToolTip("Password for encrypted/protected PDFs")
+        layout.addRow("PDF Password:", self.pypdf_password)
+
+        # Page range
+        self.pypdf_pages = QLineEdit()
+        self.pypdf_pages.setText(self.config.get("pypdf_pages", ""))
+        self.pypdf_pages.setPlaceholderText("e.g., 1-5, 10 (empty = all)")
+        layout.addRow("Page range:", self.pypdf_pages)
+
+        # Extraction mode
+        self.pypdf_mode = QComboBox()
+        self.pypdf_mode.addItems(["Text only", "Text with layout", "Text + images"])
+        self.pypdf_mode.setCurrentIndex(self.config.get("pypdf_mode", 0))
+        layout.addRow("Extraction mode:", self.pypdf_mode)
+
+        # Include page numbers
+        self.pypdf_page_numbers = QCheckBox()
+        self.pypdf_page_numbers.setChecked(self.config.get("pypdf_page_numbers", True))
+        layout.addRow("Page number headers:", self.pypdf_page_numbers)
+
+        return tab
+
+    def create_marker_tab(self) -> QWidget:
+        """Create Marker settings tab"""
+        tab = QWidget()
+        layout = QFormLayout(tab)
+
+        # Max pages
+        self.marker_max_pages = QSpinBox()
+        self.marker_max_pages.setRange(0, 10000)
+        self.marker_max_pages.setValue(self.config.get("marker_max_pages", 0))
+        self.marker_max_pages.setSpecialValueText("Unlimited")
+        self.marker_max_pages.setToolTip("Max pages to process (0 = all)")
+        layout.addRow("Max pages:", self.marker_max_pages)
+
+        # Languages
+        self.marker_languages = QLineEdit()
+        self.marker_languages.setText(self.config.get("marker_languages", ""))
+        self.marker_languages.setPlaceholderText("e.g., English, Spanish")
+        self.marker_languages.setToolTip("Expected languages (comma-separated)")
+        layout.addRow("Languages:", self.marker_languages)
+
+        # Batch multiplier
+        self.marker_batch_multiplier = QSpinBox()
+        self.marker_batch_multiplier.setRange(1, 10)
+        self.marker_batch_multiplier.setValue(self.config.get("marker_batch_multiplier", 2))
+        self.marker_batch_multiplier.setToolTip("Higher = faster but more memory (2 recommended)")
+        layout.addRow("Batch multiplier:", self.marker_batch_multiplier)
+
+        # OCR quality
+        self.marker_ocr_quality = QComboBox()
+        self.marker_ocr_quality.addItems(["Low (fast)", "Medium", "High (slow)"])
+        self.marker_ocr_quality.setCurrentIndex(self.config.get("marker_ocr_quality", 1))
+        layout.addRow("OCR quality:", self.marker_ocr_quality)
+
+        # Extract images
+        self.marker_extract_images = QCheckBox()
+        self.marker_extract_images.setChecked(self.config.get("marker_extract_images", True))
+        self.marker_extract_images.setToolTip("Extract images from PDF")
+        layout.addRow("Extract images:", self.marker_extract_images)
+
+        # Parallel processing
+        self.marker_parallel = QCheckBox()
+        self.marker_parallel.setChecked(self.config.get("marker_parallel", True))
+        self.marker_parallel.setToolTip("Use parallel processing for speed")
+        layout.addRow("Parallel processing:", self.marker_parallel)
+
+        return tab
+
+    def create_pypandoc_tab(self) -> QWidget:
+        """Create Pypandoc settings tab"""
+        tab = QWidget()
+        layout = QFormLayout(tab)
+
+        # No wrap
+        self.pypandoc_wrap = QCheckBox()
+        self.pypandoc_wrap.setChecked(not self.config.get("pypandoc_wrap", True))
+        self.pypandoc_wrap.setToolTip("Disable line wrapping")
+        layout.addRow("No wrap:", self.pypandoc_wrap)
+
+        # Column width
+        self.pypandoc_columns = QSpinBox()
+        self.pypandoc_columns.setRange(40, 200)
+        self.pypandoc_columns.setValue(self.config.get("pypandoc_columns", 80))
+        self.pypandoc_columns.setToolTip("Column width for wrapping (if enabled)")
+        layout.addRow("Column width:", self.pypandoc_columns)
+
+        # Extract media
+        self.pypandoc_extract_media = QCheckBox()
+        self.pypandoc_extract_media.setChecked(self.config.get("pypandoc_extract_media", False))
+        layout.addRow("Extract media:", self.pypandoc_extract_media)
+
+        self.pypandoc_media_dir = QLineEdit()
+        self.pypandoc_media_dir.setText(self.config.get("pypandoc_media_dir", "./media"))
+        self.pypandoc_media_dir.setPlaceholderText("./media")
+        layout.addRow("Media directory:", self.pypandoc_media_dir)
+
+        # Smart typography
+        self.pypandoc_smart = QCheckBox()
+        self.pypandoc_smart.setChecked(self.config.get("pypandoc_smart", False))
+        self.pypandoc_smart.setToolTip("Convert straight quotes to curly, --- to em-dashes, etc.")
+        layout.addRow("Smart typography:", self.pypandoc_smart)
+
+        # Table of contents
+        self.pypandoc_toc = QCheckBox()
+        self.pypandoc_toc.setChecked(self.config.get("pypandoc_toc", False))
+        layout.addRow("Generate TOC:", self.pypandoc_toc)
+
+        # Extra arguments
+        self.pypandoc_extra_args = QLineEdit()
+        self.pypandoc_extra_args.setText(self.config.get("pypandoc_extra_args", ""))
+        self.pypandoc_extra_args.setPlaceholderText("Advanced: space-separated pandoc args")
+        layout.addRow("Extra arguments:", self.pypandoc_extra_args)
+
+        return tab
+
+    def create_general_tab(self) -> QWidget:
+        """Create General settings tab"""
+        tab = QWidget()
+        layout = QFormLayout(tab)
+
+        # Output encoding
+        self.general_encoding = QComboBox()
+        self.general_encoding.addItems(["utf-8", "utf-16", "utf-8-sig", "ascii", "iso-8859-1", "cp1252"])
+        encoding = self.config.get("output_encoding", "utf-8")
+        index = self.general_encoding.findText(encoding)
+        if index >= 0:
+            self.general_encoding.setCurrentIndex(index)
+        layout.addRow("Output encoding:", self.general_encoding)
+
+        # Log verbosity
+        self.general_log_level = QComboBox()
+        self.general_log_level.addItems(["Minimal", "Normal", "Verbose", "Debug"])
+        self.general_log_level.setCurrentIndex(self.config.get("log_level", 1))
+        layout.addRow("Log verbosity:", self.general_log_level)
+
+        # Performance
+        perf_group = QGroupBox("Performance Settings")
+        perf_layout = QFormLayout()
+
+        self.general_timeout = QSpinBox()
+        self.general_timeout.setRange(0, 600)
+        self.general_timeout.setValue(self.config.get("conversion_timeout", 300))
+        self.general_timeout.setSuffix(" seconds")
+        self.general_timeout.setSpecialValueText("No timeout")
+        self.general_timeout.setToolTip("Maximum time per file (0 = unlimited)")
+        perf_layout.addRow("Timeout:", self.general_timeout)
+
+        self.general_max_filesize = QSpinBox()
+        self.general_max_filesize.setRange(0, 10000)
+        self.general_max_filesize.setValue(self.config.get("max_filesize_mb", 0))
+        self.general_max_filesize.setSuffix(" MB")
+        self.general_max_filesize.setSpecialValueText("No limit")
+        self.general_max_filesize.setToolTip("Skip files larger than this (0 = no limit)")
+        perf_layout.addRow("Max file size:", self.general_max_filesize)
+
+        self.general_parallel = QCheckBox()
+        self.general_parallel.setChecked(self.config.get("parallel_processing", False))
+        self.general_parallel.setToolTip("Process multiple files simultaneously (experimental)")
+        perf_layout.addRow("Parallel processing:", self.general_parallel)
+
+        self.general_num_workers = QSpinBox()
+        self.general_num_workers.setRange(1, 16)
+        self.general_num_workers.setValue(self.config.get("num_workers", 4))
+        self.general_num_workers.setToolTip("Number of parallel workers")
+        perf_layout.addRow("Worker threads:", self.general_num_workers)
+
+        perf_group.setLayout(perf_layout)
+        layout.addRow(perf_group)
+
+        # Error handling
+        error_group = QGroupBox("Error Handling")
+        error_layout = QFormLayout()
+
+        self.general_continue_on_error = QCheckBox()
+        self.general_continue_on_error.setChecked(self.config.get("continue_on_error", True))
+        error_layout.addRow("Continue on error:", self.general_continue_on_error)
+
+        self.general_save_error_log = QCheckBox()
+        self.general_save_error_log.setChecked(self.config.get("save_error_log", False))
+        error_layout.addRow("Save error log:", self.general_save_error_log)
+
+        error_group.setLayout(error_layout)
+        layout.addRow(error_group)
+
+        return tab
+
     def reset_to_defaults(self):
         """Reset all settings to default values"""
-        self.ocr_dpi_spin.setValue(300)
-        self.ocr_lang_edit.setText("eng")
-        self.ocr_psm_combo.setCurrentIndex(3)
-        self.ocr_oem_combo.setCurrentIndex(3)
-        self.pypandoc_wrap_check.setChecked(True)
-        self.pypandoc_extra_args.setText("")
-        self.pdfplumber_layout_check.setChecked(True)
+        # MarkItDown
+        self.md_llm_enable.setChecked(False)
+        self.md_llm_provider.setCurrentIndex(0)
+        self.md_llm_model.setText("gpt-4o")
+        self.md_llm_api_key.setText("")
+        self.md_llm_base_url.setText("")
+        self.md_extract_images.setChecked(False)
+        self.md_image_dir.setText("./images")
+
+        # OCR
+        self.ocr_dpi.setValue(300)
+        self.ocr_language.setText("eng")
+        self.ocr_psm.setCurrentIndex(3)
+        self.ocr_oem.setCurrentIndex(3)
+        self.ocr_denoise.setChecked(False)
+        self.ocr_deskew.setChecked(False)
+        self.ocr_sharpen.setChecked(False)
+        self.ocr_threshold.setChecked(False)
+        self.ocr_whitelist.setText("")
+        self.ocr_blacklist.setText("")
+
+        # PyMuPDF
+        self.pymupdf_pages.setText("")
+        self.pymupdf_images.setChecked(True)
+        self.pymupdf_tables.setChecked(True)
+        self.pymupdf_page_numbers.setChecked(True)
+        self.pymupdf_margin_left.setValue(0.5)
+        self.pymupdf_margin_right.setValue(0.5)
+        self.pymupdf_margin_top.setValue(0.5)
+        self.pymupdf_margin_bottom.setValue(0.5)
+
+        # pdfplumber
+        self.pdfp_layout.setChecked(True)
+        self.pdfp_table_strategy.setCurrentIndex(0)
+        self.pdfp_x_tolerance.setValue(3)
+        self.pdfp_y_tolerance.setValue(3)
+        self.pdfp_pages.setText("")
+
+        # PyPDF
+        self.pypdf_password.setText("")
+        self.pypdf_pages.setText("")
+        self.pypdf_mode.setCurrentIndex(0)
+        self.pypdf_page_numbers.setChecked(True)
+
+        # Marker
         self.marker_max_pages.setValue(0)
         self.marker_languages.setText("")
-        self.output_encoding.setCurrentIndex(0)
-        self.log_level.setCurrentIndex(1)
+        self.marker_batch_multiplier.setValue(2)
+        self.marker_ocr_quality.setCurrentIndex(1)
+        self.marker_extract_images.setChecked(True)
+        self.marker_parallel.setChecked(True)
+
+        # Pypandoc
+        self.pypandoc_wrap.setChecked(True)
+        self.pypandoc_columns.setValue(80)
+        self.pypandoc_extract_media.setChecked(False)
+        self.pypandoc_media_dir.setText("./media")
+        self.pypandoc_smart.setChecked(False)
+        self.pypandoc_toc.setChecked(False)
+        self.pypandoc_extra_args.setText("")
+
+        # General
+        self.general_encoding.setCurrentIndex(0)
+        self.general_log_level.setCurrentIndex(1)
+        self.general_timeout.setValue(300)
+        self.general_max_filesize.setValue(0)
+        self.general_parallel.setChecked(False)
+        self.general_num_workers.setValue(4)
+        self.general_continue_on_error.setChecked(True)
+        self.general_save_error_log.setChecked(False)
 
     def get_settings(self) -> Dict:
         """Get current settings as dictionary"""
         return {
-            "ocr_dpi": self.ocr_dpi_spin.value(),
-            "ocr_language": self.ocr_lang_edit.text(),
-            "ocr_psm": self.ocr_psm_combo.currentIndex(),
-            "ocr_oem": self.ocr_oem_combo.currentIndex(),
-            "pypandoc_wrap": not self.pypandoc_wrap_check.isChecked(),
-            "pypandoc_extra_args": self.pypandoc_extra_args.text(),
-            "pdfplumber_layout": self.pdfplumber_layout_check.isChecked(),
+            # MarkItDown
+            "md_llm_enable": self.md_llm_enable.isChecked(),
+            "md_llm_provider": self.md_llm_provider.currentIndex(),
+            "md_llm_model": self.md_llm_model.text(),
+            "md_llm_api_key": self.md_llm_api_key.text(),
+            "md_llm_base_url": self.md_llm_base_url.text(),
+            "md_extract_images": self.md_extract_images.isChecked(),
+            "md_image_dir": self.md_image_dir.text(),
+
+            # OCR
+            "ocr_dpi": self.ocr_dpi.value(),
+            "ocr_language": self.ocr_language.text(),
+            "ocr_psm": self.ocr_psm.currentIndex(),
+            "ocr_oem": self.ocr_oem.currentIndex(),
+            "ocr_denoise": self.ocr_denoise.isChecked(),
+            "ocr_deskew": self.ocr_deskew.isChecked(),
+            "ocr_sharpen": self.ocr_sharpen.isChecked(),
+            "ocr_threshold": self.ocr_threshold.isChecked(),
+            "ocr_whitelist": self.ocr_whitelist.text(),
+            "ocr_blacklist": self.ocr_blacklist.text(),
+
+            # PyMuPDF
+            "pymupdf_pages": self.pymupdf_pages.text(),
+            "pymupdf_images": self.pymupdf_images.isChecked(),
+            "pymupdf_tables": self.pymupdf_tables.isChecked(),
+            "pymupdf_page_numbers": self.pymupdf_page_numbers.isChecked(),
+            "pymupdf_margin_left": self.pymupdf_margin_left.value(),
+            "pymupdf_margin_right": self.pymupdf_margin_right.value(),
+            "pymupdf_margin_top": self.pymupdf_margin_top.value(),
+            "pymupdf_margin_bottom": self.pymupdf_margin_bottom.value(),
+
+            # pdfplumber
+            "pdfplumber_layout": self.pdfp_layout.isChecked(),
+            "pdfplumber_table_strategy": self.pdfp_table_strategy.currentText(),
+            "pdfplumber_x_tolerance": self.pdfp_x_tolerance.value(),
+            "pdfplumber_y_tolerance": self.pdfp_y_tolerance.value(),
+            "pdfplumber_pages": self.pdfp_pages.text(),
+
+            # PyPDF
+            "pypdf_password": self.pypdf_password.text(),
+            "pypdf_pages": self.pypdf_pages.text(),
+            "pypdf_mode": self.pypdf_mode.currentIndex(),
+            "pypdf_page_numbers": self.pypdf_page_numbers.isChecked(),
+
+            # Marker
             "marker_max_pages": self.marker_max_pages.value(),
             "marker_languages": self.marker_languages.text(),
-            "output_encoding": self.output_encoding.currentText(),
-            "log_level": self.log_level.currentIndex()
+            "marker_batch_multiplier": self.marker_batch_multiplier.value(),
+            "marker_ocr_quality": self.marker_ocr_quality.currentIndex(),
+            "marker_extract_images": self.marker_extract_images.isChecked(),
+            "marker_parallel": self.marker_parallel.isChecked(),
+
+            # Pypandoc
+            "pypandoc_wrap": not self.pypandoc_wrap.isChecked(),
+            "pypandoc_columns": self.pypandoc_columns.value(),
+            "pypandoc_extract_media": self.pypandoc_extract_media.isChecked(),
+            "pypandoc_media_dir": self.pypandoc_media_dir.text(),
+            "pypandoc_smart": self.pypandoc_smart.isChecked(),
+            "pypandoc_toc": self.pypandoc_toc.isChecked(),
+            "pypandoc_extra_args": self.pypandoc_extra_args.text(),
+
+            # General
+            "output_encoding": self.general_encoding.currentText(),
+            "log_level": self.general_log_level.currentIndex(),
+            "conversion_timeout": self.general_timeout.value(),
+            "max_filesize_mb": self.general_max_filesize.value(),
+            "parallel_processing": self.general_parallel.isChecked(),
+            "num_workers": self.general_num_workers.value(),
+            "continue_on_error": self.general_continue_on_error.isChecked(),
+            "save_error_log": self.general_save_error_log.isChecked(),
         }
-
-
 class MarkItDownGUI(QMainWindow):
     """Main GUI window for MarkItDown converter"""
 
