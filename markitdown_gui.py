@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QListWidget, QLabel, QFileDialog, QTextEdit,
     QLineEdit, QGroupBox, QProgressBar, QMessageBox, QListWidgetItem,
-    QComboBox, QCheckBox
+    QComboBox, QCheckBox, QDialog, QTabWidget, QSpinBox, QFormLayout
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QAction
@@ -30,12 +30,13 @@ class ConversionWorker(QThread):
     error = pyqtSignal(str, str)  # filename, error message
 
     def __init__(self, files: List[str], output_dir: str, use_source_dir: bool = True,
-                 converter_preference: str = 'auto'):
+                 converter_preference: str = 'auto', config: Dict = None):
         super().__init__()
         self.files = files
         self.output_dir = output_dir
         self.use_source_dir = use_source_dir
         self.converter_preference = converter_preference
+        self.config = config or {}
         self._is_running = True
 
     def stop(self):
@@ -45,8 +46,8 @@ class ConversionWorker(QThread):
     def run(self):
         """Convert files in background thread"""
         try:
-            # Initialize multi-converter
-            converter = MultiConverter()
+            # Initialize multi-converter with settings
+            converter = MultiConverter(self.config)
             available = converter.get_available_converters()
 
             if not available:
@@ -167,6 +168,200 @@ class DragDropListWidget(QListWidget):
                 self.files_dropped.emit(files)
         else:
             event.ignore()
+
+
+class SettingsDialog(QDialog):
+    """Settings dialog for converter-specific configuration"""
+
+    def __init__(self, config: Dict, parent=None):
+        super().__init__(parent)
+        self.config = config
+        self.setWindowTitle("Converter Settings")
+        self.setMinimumSize(600, 500)
+        self.init_ui()
+
+    def init_ui(self):
+        """Initialize the settings UI"""
+        layout = QVBoxLayout(self)
+
+        # Create tab widget
+        tabs = QTabWidget()
+
+        # OCR Settings Tab
+        ocr_tab = QWidget()
+        ocr_layout = QFormLayout(ocr_tab)
+
+        # OCR DPI
+        self.ocr_dpi_spin = QSpinBox()
+        self.ocr_dpi_spin.setRange(72, 600)
+        self.ocr_dpi_spin.setValue(self.config.get("ocr_dpi", 300))
+        self.ocr_dpi_spin.setSuffix(" DPI")
+        self.ocr_dpi_spin.setToolTip("Higher DPI = better quality but slower (recommended: 300)")
+        ocr_layout.addRow("Image DPI:", self.ocr_dpi_spin)
+
+        # OCR Language
+        self.ocr_lang_edit = QLineEdit()
+        self.ocr_lang_edit.setText(self.config.get("ocr_language", "eng"))
+        self.ocr_lang_edit.setToolTip("Language code (e.g., 'eng' for English, 'fra' for French, 'eng+fra' for both)")
+        ocr_layout.addRow("Language:", self.ocr_lang_edit)
+
+        # OCR PSM Mode
+        self.ocr_psm_combo = QComboBox()
+        psm_modes = [
+            "0 - Orientation and script detection (OSD) only",
+            "1 - Automatic page segmentation with OSD",
+            "2 - Automatic page segmentation (no OSD)",
+            "3 - Fully automatic page segmentation (default)",
+            "4 - Single column of text",
+            "5 - Single uniform block of vertically aligned text",
+            "6 - Single uniform block of text",
+            "7 - Treat the image as a single text line",
+            "8 - Treat the image as a single word",
+            "9 - Treat the image as a single word in a circle",
+            "10 - Treat the image as a single character",
+            "11 - Sparse text. Find as much text as possible",
+            "12 - Sparse text with OSD",
+            "13 - Raw line. Treat the image as a single text line"
+        ]
+        self.ocr_psm_combo.addItems(psm_modes)
+        self.ocr_psm_combo.setCurrentIndex(self.config.get("ocr_psm", 3))
+        self.ocr_psm_combo.setToolTip("Page Segmentation Mode - controls how Tesseract analyzes the page")
+        ocr_layout.addRow("PSM Mode:", self.ocr_psm_combo)
+
+        # OCR Engine Mode
+        self.ocr_oem_combo = QComboBox()
+        oem_modes = [
+            "0 - Legacy engine only",
+            "1 - Neural nets LSTM engine only",
+            "2 - Legacy + LSTM engines",
+            "3 - Default (based on what is available)"
+        ]
+        self.ocr_oem_combo.addItems(oem_modes)
+        self.ocr_oem_combo.setCurrentIndex(self.config.get("ocr_oem", 3))
+        self.ocr_oem_combo.setToolTip("OCR Engine Mode - LSTM is more accurate but slower")
+        ocr_layout.addRow("Engine Mode:", self.ocr_oem_combo)
+
+        tabs.addTab(ocr_tab, "🔍 OCR Settings")
+
+        # Pypandoc Settings Tab
+        pypandoc_tab = QWidget()
+        pypandoc_layout = QFormLayout(pypandoc_tab)
+
+        self.pypandoc_wrap_check = QCheckBox()
+        self.pypandoc_wrap_check.setChecked(not self.config.get("pypandoc_wrap", True))
+        self.pypandoc_wrap_check.setToolTip("Disable line wrapping in output")
+        pypandoc_layout.addRow("No wrap:", self.pypandoc_wrap_check)
+
+        self.pypandoc_extra_args = QLineEdit()
+        self.pypandoc_extra_args.setText(self.config.get("pypandoc_extra_args", ""))
+        self.pypandoc_extra_args.setPlaceholderText("e.g., --extract-media=./media")
+        self.pypandoc_extra_args.setToolTip("Additional pandoc command-line arguments (space-separated)")
+        pypandoc_layout.addRow("Extra arguments:", self.pypandoc_extra_args)
+
+        tabs.addTab(pypandoc_tab, "📄 Pypandoc")
+
+        # pdfplumber Settings Tab
+        pdfplumber_tab = QWidget()
+        pdfplumber_layout = QFormLayout(pdfplumber_tab)
+
+        self.pdfplumber_layout_check = QCheckBox()
+        self.pdfplumber_layout_check.setChecked(self.config.get("pdfplumber_layout", True))
+        self.pdfplumber_layout_check.setToolTip("Preserve layout when extracting text")
+        pdfplumber_layout.addRow("Preserve layout:", self.pdfplumber_layout_check)
+
+        tabs.addTab(pdfplumber_tab, "📊 pdfplumber")
+
+        # Marker Settings Tab
+        marker_tab = QWidget()
+        marker_layout = QFormLayout(marker_tab)
+
+        self.marker_max_pages = QSpinBox()
+        self.marker_max_pages.setRange(0, 10000)
+        self.marker_max_pages.setValue(self.config.get("marker_max_pages", 0))
+        self.marker_max_pages.setSpecialValueText("Unlimited")
+        self.marker_max_pages.setToolTip("Maximum pages to process (0 = unlimited)")
+        marker_layout.addRow("Max pages:", self.marker_max_pages)
+
+        self.marker_languages = QLineEdit()
+        self.marker_languages.setText(self.config.get("marker_languages", ""))
+        self.marker_languages.setPlaceholderText("e.g., English")
+        self.marker_languages.setToolTip("Expected languages in the PDF (comma-separated)")
+        marker_layout.addRow("Languages:", self.marker_languages)
+
+        tabs.addTab(marker_tab, "🤖 Marker")
+
+        # General Settings Tab
+        general_tab = QWidget()
+        general_layout = QFormLayout(general_tab)
+
+        self.output_encoding = QComboBox()
+        self.output_encoding.addItems(["utf-8", "utf-16", "ascii", "iso-8859-1"])
+        current_encoding = self.config.get("output_encoding", "utf-8")
+        index = self.output_encoding.findText(current_encoding)
+        if index >= 0:
+            self.output_encoding.setCurrentIndex(index)
+        general_layout.addRow("Output encoding:", self.output_encoding)
+
+        self.log_level = QComboBox()
+        self.log_level.addItems(["Minimal", "Normal", "Verbose"])
+        log_index = self.config.get("log_level", 1)
+        self.log_level.setCurrentIndex(log_index)
+        self.log_level.setToolTip("Amount of information shown in conversion log")
+        general_layout.addRow("Log verbosity:", self.log_level)
+
+        tabs.addTab(general_tab, "⚙️ General")
+
+        layout.addWidget(tabs)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+
+        reset_btn = QPushButton("Reset to Defaults")
+        reset_btn.clicked.connect(self.reset_to_defaults)
+        button_layout.addWidget(reset_btn)
+
+        button_layout.addStretch()
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(self.accept)
+        save_btn.setDefault(True)
+        button_layout.addWidget(save_btn)
+
+        layout.addLayout(button_layout)
+
+    def reset_to_defaults(self):
+        """Reset all settings to default values"""
+        self.ocr_dpi_spin.setValue(300)
+        self.ocr_lang_edit.setText("eng")
+        self.ocr_psm_combo.setCurrentIndex(3)
+        self.ocr_oem_combo.setCurrentIndex(3)
+        self.pypandoc_wrap_check.setChecked(True)
+        self.pypandoc_extra_args.setText("")
+        self.pdfplumber_layout_check.setChecked(True)
+        self.marker_max_pages.setValue(0)
+        self.marker_languages.setText("")
+        self.output_encoding.setCurrentIndex(0)
+        self.log_level.setCurrentIndex(1)
+
+    def get_settings(self) -> Dict:
+        """Get current settings as dictionary"""
+        return {
+            "ocr_dpi": self.ocr_dpi_spin.value(),
+            "ocr_language": self.ocr_lang_edit.text(),
+            "ocr_psm": self.ocr_psm_combo.currentIndex(),
+            "ocr_oem": self.ocr_oem_combo.currentIndex(),
+            "pypandoc_wrap": not self.pypandoc_wrap_check.isChecked(),
+            "pypandoc_extra_args": self.pypandoc_extra_args.text(),
+            "pdfplumber_layout": self.pdfplumber_layout_check.isChecked(),
+            "marker_max_pages": self.marker_max_pages.value(),
+            "marker_languages": self.marker_languages.text(),
+            "output_encoding": self.output_encoding.currentText(),
+            "log_level": self.log_level.currentIndex()
+        }
 
 
 class MarkItDownGUI(QMainWindow):
@@ -410,6 +605,13 @@ class MarkItDownGUI(QMainWindow):
         """Create menu bar with theme selection"""
         menubar = self.menuBar()
 
+        # Settings menu
+        settings_menu = menubar.addMenu("⚙️ Settings")
+
+        converter_settings_action = QAction("Converter Settings", self)
+        converter_settings_action.triggered.connect(self.show_settings)
+        settings_menu.addAction(converter_settings_action)
+
         # Themes menu
         themes_menu = menubar.addMenu("🎨 Themes")
 
@@ -469,6 +671,16 @@ class MarkItDownGUI(QMainWindow):
             "• Pypandoc (NOT for PDFs)\n\n"
             "Theme system from Fiori_Search"
         )
+
+    def show_settings(self):
+        """Show settings dialog"""
+        dialog = SettingsDialog(self.config, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Update config with new settings
+            new_settings = dialog.get_settings()
+            self.config.update(new_settings)
+            self.save_config()
+            self.log("Settings saved successfully")
 
     def on_use_source_dir_changed(self, state):
         """Handle use source directory checkbox change"""
@@ -664,7 +876,8 @@ class MarkItDownGUI(QMainWindow):
             self.files_to_convert.copy(),
             output_dir,
             use_source_dir,
-            converter_pref
+            converter_pref,
+            self.config
         )
         self.worker.progress.connect(self.update_progress)
         self.worker.log.connect(self.log)

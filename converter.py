@@ -24,8 +24,9 @@ class MultiConverter:
     Tries multiple conversion methods to maximize success rate.
     """
 
-    def __init__(self):
-        """Initialize converter with available backends"""
+    def __init__(self, config: dict = None):
+        """Initialize converter with available backends and configuration"""
+        self.config = config or {}
         self.available_converters = []
         self._check_available_converters()
 
@@ -153,12 +154,24 @@ class MultiConverter:
                     error_message=f'Unsupported format: {ext}'
                 )
 
+            # Build extra arguments from config
+            extra_args = []
+
+            # Add wrap setting
+            if not self.config.get('pypandoc_wrap', True):
+                extra_args.append('--wrap=none')
+
+            # Add custom extra arguments
+            custom_args = self.config.get('pypandoc_extra_args', '').strip()
+            if custom_args:
+                extra_args.extend(custom_args.split())
+
             # Convert to markdown
             output = pypandoc.convert_file(
                 file_path,
                 'markdown',
                 format=input_format,
-                extra_args=['--wrap=none']  # Don't wrap long lines
+                extra_args=extra_args if extra_args else None
             )
 
             if output and len(output.strip()) > 0:
@@ -203,13 +216,15 @@ class MultiConverter:
 
             # Extract text from PDF
             text_content = []
+            layout = self.config.get('pdfplumber_layout', True)
+
             with pdfplumber.open(file_path) as pdf:
                 for page_num, page in enumerate(pdf.pages, 1):
                     # Add page header
                     text_content.append(f"\n## Page {page_num}\n")
 
-                    # Extract text
-                    page_text = page.extract_text()
+                    # Extract text with layout option
+                    page_text = page.extract_text(layout=layout)
                     if page_text:
                         text_content.append(page_text)
 
@@ -269,8 +284,19 @@ class MultiConverter:
             # Load models (this may take time on first run)
             model_lst = load_all_models()
 
+            # Get marker settings
+            max_pages = self.config.get('marker_max_pages', 0)
+            languages = self.config.get('marker_languages', '')
+
+            # Build conversion kwargs
+            convert_kwargs = {}
+            if max_pages > 0:
+                convert_kwargs['max_pages'] = max_pages
+            if languages:
+                convert_kwargs['languages'] = [lang.strip() for lang in languages.split(',')]
+
             # Convert PDF to markdown
-            full_text, images, out_meta = convert_single_pdf(file_path, model_lst)
+            full_text, images, out_meta = convert_single_pdf(file_path, model_lst, **convert_kwargs)
 
             if full_text and len(full_text.strip()) > 0:
                 return ConversionResult(
@@ -367,8 +393,9 @@ class MultiConverter:
                 )
 
             # Convert PDF pages to images
+            ocr_dpi = self.config.get('ocr_dpi', 300)
             try:
-                images = convert_from_path(file_path, dpi=300)
+                images = convert_from_path(file_path, dpi=ocr_dpi)
             except Exception as e:
                 return ConversionResult(
                     success=False,
@@ -377,6 +404,14 @@ class MultiConverter:
                     error_message=f'Failed to convert PDF to images: {str(e)}'
                 )
 
+            # Get OCR settings
+            ocr_language = self.config.get('ocr_language', 'eng')
+            ocr_psm = self.config.get('ocr_psm', 3)
+            ocr_oem = self.config.get('ocr_oem', 3)
+
+            # Build Tesseract config
+            tesseract_config = f'--psm {ocr_psm} --oem {ocr_oem}'
+
             # OCR each page
             text_content = []
             for page_num, image in enumerate(images, 1):
@@ -384,7 +419,11 @@ class MultiConverter:
 
                 # Perform OCR on the image
                 try:
-                    page_text = pytesseract.image_to_string(image, lang='eng')
+                    page_text = pytesseract.image_to_string(
+                        image,
+                        lang=ocr_language,
+                        config=tesseract_config
+                    )
                     if page_text:
                         text_content.append(page_text)
                 except Exception as e:
